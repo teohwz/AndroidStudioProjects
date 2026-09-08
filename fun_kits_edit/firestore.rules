@@ -52,14 +52,24 @@ rules_version = '2';
 //  validate quiz/game scores server-side, which is out of scope for this
 //  prototype. The same applies to a visitor's own `game_plays/{uid}_{boothId}`
 //  doc: rules bind it to the caller's own uid and its literal id shape, but
-//  don't re-derive the exact +1-per-play arithmetic recordGamePlay()
-//  performs, so a visitor could in principle reset their own play count —
+//  don't re-derive the exact shared-attempt-pool arithmetic recordGamePlay()/
+//  checkInBooth()/creditFollowTask() perform (attemptsUsed vs. the
+//  checkinEarned/followEarned/minigameEarned flags that grant it), so a
+//  visitor could in principle grant themselves extra attempts at one booth —
 //  a self-serving exploit of the same class already accepted above for
 //  points, not a way to affect anyone else's account or ranking. Combined
 //  with the bounded stock/redemption/booth-ownership rules above, the
 //  practical exploit surface stays limited to a user granting themselves
 //  extra DEMO points or extra plays of a free game (no real money, no real
 //  voucher codes, and no other visitor's or exhibitor's data is reachable).
+//  Same class of trade-off applies to `game_content/{boothId}_{gameType}`'s
+//  prize-stock decrement (see playPrizeGame()): rules bind that write to
+//  the doc's own `segments` field on an existing spin_wheel/scratch_card
+//  doc, but — like recordGamePlay's play-count arithmetic — don't
+//  re-derive the exact "-1 to exactly one segment" shape server-side, so a
+//  visitor could in principle manipulate their own view of a booth's
+//  remaining prize stock. Same limited blast radius as above: a visitor's
+//  own play experience only, never another user's or exhibitor's data.
 // ═══════════════════════════════════════════════════════════════════════════
 
 service cloud.firestore {
@@ -287,8 +297,9 @@ service cloud.firestore {
       allow update: if isCurrentBoothOwner()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'name', 'description', 'logoUrl', 'contactEmail', 'contactPhone',
-             'website', 'themeColorHex', 'secondaryColorHex',
-             'backgroundColorHex', 'welcomeMessage', 'qrPresetStyle'
+             'website', 'facebookUrl', 'instagramUrl', 'themeColorHex',
+             'secondaryColorHex', 'backgroundColorHex', 'welcomeMessage',
+             'qrPresetStyle'
            ]);
 
       // Per-game enable/points config — owner only, bounded to gameConfig.
@@ -328,12 +339,17 @@ service cloud.firestore {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  PER-BOOTH GAME PLAY LIMITER — see FirestoreService.recordGamePlay.
+    //  PER-BOOTH SHARED ATTEMPT POOL — see FirestoreService.recordGamePlay/
+    //  checkInBooth/creditFollowTask/setMinigameTaskKeys. Each visitor gets
+    //  one shared pool of attempts per booth (1 baseline + up to 3 more
+    //  earned via checkinEarned/followEarned/minigameEarned), spendable on
+    //  any of that booth's games (attemptsUsed), not gated per game type.
     //  Read is left open (matches the existing booth_checkins/game_sessions
     //  convention below: aggregate play counts, no PII). Writes are bound to
     //  the caller's own uid and to the exact "<uid>_<boothId>" doc id
-    //  recordGamePlay/checkInBooth always target — see the documented
-    //  limitation at the top of this file for what this does NOT close.
+    //  recordGamePlay/checkInBooth/creditFollowTask/setMinigameTaskKeys
+    //  always target — see the documented limitation at the top of this
+    //  file for what this does NOT close.
     // ═══════════════════════════════════════════════════════════════════════
     match /game_plays/{docId} {
       allow read: if isSignedIn();
@@ -341,6 +357,54 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.boothId is string
         && docId == request.auth.uid + '_' + request.resource.data.boothId;
+      allow delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  GAME CONTENT — exhibitor-authored customization for the prize-based
+    //  mini-games and Memory Cards' pair images (game_content_model.dart),
+    //  one doc per booth per game at `{boothId}_{gameType}`. Read is left
+    //  open (every visitor needs it to render the game at that booth, same
+    //  as exhibitors/{boothId} itself). Authoring is owner-only, bounded to
+    //  the doc's own booth. See the top-of-file note for the second, looser
+    //  rule below that lets playPrizeGame() decrement prize stock.
+    // ═══════════════════════════════════════════════════════════════════════
+    match /game_content/{docId} {
+      allow read: if isSignedIn();
+
+      // Exhibitor authoring their own booth's content — full doc write,
+      // bounded to a doc id that actually matches this booth+game.
+      allow create, update: if isSignedIn()
+        && request.resource.data.boothId is string
+        && ownsBooth(request.resource.data.boothId)
+        && request.resource.data.gameType is string
+        && docId == request.resource.data.boothId + '_' + request.resource.data.gameType;
+
+      // playPrizeGame()'s stock decrement — any signed-in visitor may touch
+      // ONLY the `segments` field on an existing spin_wheel/scratch_card
+      // doc they don't own. See the top-of-file honest-limitation note for
+      // what this doesn't close.
+      allow update: if isSignedIn()
+        && resource.data.gameType in ['spin_wheel', 'scratch_card']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['segments']);
+
+      allow delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PRIZE WINS — physical-prize wins logged by playPrizeGame(), for the
+    //  exhibitor's in-person hand-out checklist. A visitor logs their own
+    //  win; only that booth's owner may later tick it collected.
+    // ═══════════════════════════════════════════════════════════════════════
+    match /prize_wins/{winId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.boothId is string
+        && request.resource.data.collected == false;
+      allow update: if isSignedIn()
+        && ownsBooth(resource.data.boothId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['collected']);
       allow delete: if false;
     }
 

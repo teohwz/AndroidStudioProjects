@@ -9,11 +9,12 @@ import '../../core/services/firestore_service.dart';
 import '../../shared/widgets/fun_button.dart';
 import '../games/game_common.dart';
 
-/// Puzzle now plays by the same per-booth rules as the other 5 generic
-/// booth games (see kGenericBoothGames): one free play per booth, plus one
-/// shared bonus play if the visitor has checked in — enforced by
-/// FirestoreService.recordGamePlay via submitGameScore, not by a global
-/// SharedPreferences-tracked attempts pool like this screen used to have.
+/// Puzzle now plays by the same per-booth rules as the other games (see
+/// kGenericBoothGames/kPrizeBoothGames): every visitor shares ONE attempt
+/// pool per booth (see BoothAttemptPool), spendable on any of that booth's
+/// games — enforced by FirestoreService.recordGamePlay via submitGameScore,
+/// not by a global SharedPreferences-tracked attempts pool like this screen
+/// used to have.
 class PuzzleScreen extends StatefulWidget {
   const PuzzleScreen({super.key, this.exhibitorId});
 
@@ -64,8 +65,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     if (uid != null &&
         widget.exhibitorId != null &&
         widget.exhibitorId!.isNotEmpty) {
-      final remaining =
-          await _fs.remainingPlays(uid, widget.exhibitorId!, 'puzzle');
+      final remaining = await _fs.remainingAttempts(uid, widget.exhibitorId!);
       locked = remaining <= 0;
     }
 
@@ -244,12 +244,13 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
           children: [
             const Text('🔒', style: TextStyle(fontSize: 64)),
             const SizedBox(height: 16),
-            const Text('Already Played Here',
+            const Text('No Attempts Left',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
             const Text(
-              'Check in at this booth for a bonus round, or try this puzzle '
-              'at another booth!',
+              "You've used up this booth's shared attempts. Complete a "
+              'booth task (follow the exhibitor, play a featured mini-game) '
+              'to earn more, or try another booth!',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textMedium),
             ),

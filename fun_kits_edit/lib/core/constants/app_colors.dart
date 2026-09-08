@@ -24,6 +24,9 @@ class AppColors {
   static const Color luckyDrawColor = Color(0xFF6C63FF);
   static const Color leaderboardColor = Color(0xFFFFD700);
   static const Color exhibitorColor = Color(0xFF43D787);
+  static const Color spinWheelColor = Color(0xFFFF6B9D);
+  static const Color scratchCardColor = Color(0xFFFFB84D);
+  static const Color guessNumberColor = Color(0xFF5C6BC0);
 
   // Gradients
   static const LinearGradient primaryGradient = LinearGradient(

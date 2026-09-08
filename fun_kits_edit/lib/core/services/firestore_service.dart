@@ -9,6 +9,7 @@ import '../models/lucky_draw_model.dart';
 import '../models/reward_model.dart';
 import '../models/redemption_model.dart';
 import '../models/inventory_log_model.dart';
+import '../models/game_content_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -617,10 +618,9 @@ class FirestoreService {
     return snap.docs.map((d) => d['boothId'] as String).toList();
   }
 
-  /// Check into a booth — earns +1 shared bonus game-attempt at THIS booth
-  /// if first time (see canPlayGame/recordGamePlay below; this used to
-  /// grant a global +1 Puzzle attempt before Puzzle moved onto the same
-  /// per-booth limiter as the other 5 generic games).
+  /// Check into a booth — earns +1 shared attempt at THIS booth in the
+  /// visitor's attempt pool if first time (see BoothAttemptPool and
+  /// recordGamePlay below).
   Future<bool> checkInBooth(String uid, String boothId) async {
     final existing = await _db
         .collection('booth_checkins')
@@ -638,7 +638,7 @@ class FirestoreService {
       {
         'uid': uid,
         'boothId': boothId,
-        'bonusRemaining': 1,
+        'checkinEarned': true,
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
@@ -654,15 +654,26 @@ class FirestoreService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  PER-BOOTH GAME PLAY LIMITER — every visitor gets exactly 1 free play
-  //  per generic game (see kGenericBoothGames) at each booth, plus ONE
-  //  shared bonus attempt per booth (granted by checkInBooth above, spent
-  //  on whichever single one of that booth's games the visitor chooses).
-  //  `game_plays/{uid}_{boothId}` holds `plays: {gameType: count}` +
-  //  `bonusRemaining` (0 or 1). Never trust the UI-only check
-  //  (canPlayGame) for the real decision — recordGamePlay's transaction is
-  //  what actually prevents a double-tap/two-tabs race from spending the
-  //  single shared bonus twice or granting more than 2 plays of one game.
+  //  PER-BOOTH SHARED ATTEMPT POOL — every visitor gets ONE shared pool of
+  //  attempts per booth, spendable on ANY of that booth's games (not
+  //  gated per game type). The pool starts at 1 baseline attempt and can
+  //  grow to a max of 4 by completing booth tasks:
+  //    1 baseline (always available)
+  //  + 1 for checking in (checkInBooth — auto-fires on booth entry)
+  //  + 1 for "Follow the Exhibitor" (creditFollowTask — capped at +1 no
+  //        matter how many of Facebook/Instagram/Website are tapped)
+  //  + 1 for "Play a Mini-Game" (auto-credited by recordGamePlay itself
+  //        the moment the visitor finishes a round of either of the 2
+  //        games currently named in `taskGameKeys` — see
+  //        setMinigameTaskKeys)
+  //  `game_plays/{uid}_{boothId}` holds `attemptsUsed` (int),
+  //  `checkinEarned`/`followEarned`/`minigameEarned` (bool), `taskGameKeys`
+  //  (the up-to-2 game types currently assigned to the mini-game task) and
+  //  `plays: {gameType: count}` (kept only for getBoothStats' analytics,
+  //  no longer used for gating). Never trust the UI-only check
+  //  (remainingAttempts) for the real decision — recordGamePlay's
+  //  transaction is what actually prevents a double-tap/two-tabs race from
+  //  spending more attempts than the pool currently holds.
   // ═══════════════════════════════════════════════════════════════════════
 
   DocumentReference<Map<String, dynamic>> _gamePlayRef(
@@ -670,56 +681,105 @@ class FirestoreService {
       _db.collection('game_plays').doc('${uid}_$boothId');
 
   /// Read-only check for the booth screen's UI (grey out / label a game
-  /// tile) — NOT the security boundary. Returns how many more times
-  /// [gameType] can be played at [boothId] right now: 0 (locked), or more.
-  Future<int> remainingPlays(String uid, String boothId, String gameType) async {
+  /// tile) — NOT the security boundary. Returns how many attempts are left
+  /// in [boothId]'s shared pool for [uid] right now: 0 (locked), or more.
+  Future<int> remainingAttempts(String uid, String boothId) async {
     final snap = await _gamePlayRef(uid, boothId).get();
-    if (!snap.exists) return 1; // free play, never touched this booth
-    final data = snap.data()!;
-    final plays = Map<String, dynamic>.from(data['plays'] ?? {});
-    final playCount = (plays[gameType] as num?)?.toInt() ?? 0;
-    final bonusRemaining = (data['bonusRemaining'] as num?)?.toInt() ?? 0;
-    if (playCount == 0) return 1; // free play still available
-    if (playCount == 1 && bonusRemaining > 0) return 1; // bonus spendable here
-    return 0; // this game is fully used up at this booth
+    return BoothAttemptPool.fromMap(snap.data()).attemptsRemaining;
   }
 
-  /// Atomically validates AND consumes one play of [gameType] at [boothId]
-  /// for [uid] — call this right before awarding points (see
+  /// Live view of [boothId]'s shared attempt pool for [uid] — powers the
+  /// booth screen's "X attempts left" badges and Booth Tasks progress.
+  Stream<BoothAttemptPool> watchAttemptPool(String uid, String boothId) {
+    return _gamePlayRef(uid, boothId)
+        .snapshots()
+        .map((snap) => BoothAttemptPool.fromMap(snap.data()));
+  }
+
+  /// Assigns (or re-rolls) the up-to-2 game types shown on the "Play a
+  /// Mini-Game" booth task — called once each time the visitor opens a
+  /// booth screen, from [eligible] (that booth's currently-enabled generic
+  /// games). Picks a fresh random 2 every call when more than 2 are
+  /// eligible, per the confirmed design; harmless to re-roll even after
+  /// the task is already earned, since crediting stays capped by
+  /// `minigameEarned`.
+  Future<void> setMinigameTaskKeys(
+      String uid, String boothId, List<String> eligible) async {
+    final picked = List<String>.from(eligible);
+    if (picked.length > 2) {
+      picked.shuffle(Random());
+      picked.removeRange(2, picked.length);
+    }
+    await _gamePlayRef(uid, boothId).set(
+      {
+        'uid': uid,
+        'boothId': boothId,
+        'taskGameKeys': picked,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  /// Credits the "Follow the Exhibitor" booth task's +1 attempt, the
+  /// instant the visitor taps any one of the Facebook/Instagram/Website
+  /// sub-tasks — the caller opens the link regardless of this call's
+  /// result. Returns true the first time (this call is what earned it),
+  /// false if the category was already credited (still fine to tap
+  /// additional sub-tasks — they just don't grant a second attempt).
+  Future<bool> creditFollowTask(String uid, String boothId) async {
+    final ref = _gamePlayRef(uid, boothId);
+    return _db.runTransaction<bool>((tx) async {
+      final snap = await tx.get(ref);
+      final data = snap.data() ?? {};
+      if (data['followEarned'] == true) return false; // already earned
+      tx.set(
+        ref,
+        {
+          'uid': uid,
+          'boothId': boothId,
+          'followEarned': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      return true;
+    });
+  }
+
+  /// Atomically validates AND consumes one attempt from [boothId]'s shared
+  /// pool for [uid] — call this right before awarding points (see
   /// game_common.submitGameScore), never only at "Play" tap time. Returns
-  /// true if the play was allowed and recorded, false if the visitor has
-  /// no free play or bonus left for this game at this booth.
+  /// true if the play was allowed and recorded, false if the visitor's
+  /// pool is exhausted at this booth. If [gameType] is currently one of
+  /// the booth's assigned `taskGameKeys` and the "Play a Mini-Game" task
+  /// hasn't been earned yet, this finishing play also credits it — the +1
+  /// attempt that unlocks applies to the visitor's NEXT play, not this one.
   Future<bool> recordGamePlay(
       String uid, String boothId, String gameType) async {
     final ref = _gamePlayRef(uid, boothId);
     return _db.runTransaction<bool>((tx) async {
       final snap = await tx.get(ref);
       final data = snap.data() ?? {};
-      final plays = Map<String, dynamic>.from(data['plays'] ?? {});
-      final playCount = (plays[gameType] as num?)?.toInt() ?? 0;
-      final bonusRemaining = (data['bonusRemaining'] as num?)?.toInt() ?? 0;
-
-      bool spendBonus = false;
-      if (playCount == 0) {
-        // using the free play — nothing else to check
-      } else if (playCount == 1 && bonusRemaining > 0) {
-        spendBonus = true;
-      } else {
-        return false; // no free play or bonus left for this game here
+      final pool = BoothAttemptPool.fromMap(data);
+      if (pool.attemptsUsed >= pool.attemptsGranted) {
+        return false; // pool exhausted at this booth
       }
 
-      plays[gameType] = playCount + 1;
-      tx.set(
-        ref,
-        {
-          'uid': uid,
-          'boothId': boothId,
-          'plays': plays,
-          if (spendBonus) 'bonusRemaining': bonusRemaining - 1,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      final plays = Map<String, dynamic>.from(data['plays'] ?? {});
+      plays[gameType] = ((plays[gameType] as num?)?.toInt() ?? 0) + 1;
+
+      final updates = <String, dynamic>{
+        'uid': uid,
+        'boothId': boothId,
+        'attemptsUsed': pool.attemptsUsed + 1,
+        'plays': plays,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      if (!pool.minigameEarned && pool.taskGameKeys.contains(gameType)) {
+        updates['minigameEarned'] = true;
+      }
+      tx.set(ref, updates, SetOptions(merge: true));
       return true;
     });
   }
@@ -1285,6 +1345,193 @@ class FirestoreService {
       'pointsDistributed': pointsDistributed,
     };
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  GAME CONTENT — exhibitor-authored customization for the prize-based
+  //  mini-games (Spin Wheel, Scratch Card, Guess the Number) and for the
+  //  reworked Memory Cards' pair images. One doc per booth per game at
+  //  `game_content/{boothId}_{gameType}` — see game_content_model.dart for
+  //  the field shapes. A game only appears on the visitor's booth screen
+  //  once its content doc exists with valid content (see each config's
+  //  `hasContent`), so a freshly-registered exhibitor's booth shows only
+  //  the games they've actually set up.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  DocumentReference<Map<String, dynamic>> _gameContentRef(
+          String boothId, String gameType) =>
+      _db.collection('game_content').doc('${boothId}_$gameType');
+
+  // ── Spin Wheel ─────────────────────────────────────────────────────────
+  Future<SpinWheelConfig?> getSpinWheelConfig(String boothId) async {
+    final snap = await _gameContentRef(boothId, 'spin_wheel').get();
+    if (!snap.exists) return null;
+    return SpinWheelConfig.fromMap(boothId, snap.data()!);
+  }
+
+  Stream<SpinWheelConfig?> watchSpinWheelConfig(String boothId) {
+    return _gameContentRef(boothId, 'spin_wheel').snapshots().map(
+        (snap) => snap.exists ? SpinWheelConfig.fromMap(boothId, snap.data()!) : null);
+  }
+
+  Future<void> saveSpinWheelConfig(SpinWheelConfig config) async {
+    final map = config.toMap();
+    map['updatedAt'] = FieldValue.serverTimestamp();
+    await _gameContentRef(config.boothId, 'spin_wheel').set(map);
+  }
+
+  // ── Scratch Card ───────────────────────────────────────────────────────
+  Future<ScratchCardConfig?> getScratchCardConfig(String boothId) async {
+    final snap = await _gameContentRef(boothId, 'scratch_card').get();
+    if (!snap.exists) return null;
+    return ScratchCardConfig.fromMap(boothId, snap.data()!);
+  }
+
+  Stream<ScratchCardConfig?> watchScratchCardConfig(String boothId) {
+    return _gameContentRef(boothId, 'scratch_card').snapshots().map((snap) =>
+        snap.exists ? ScratchCardConfig.fromMap(boothId, snap.data()!) : null);
+  }
+
+  Future<void> saveScratchCardConfig(ScratchCardConfig config) async {
+    final map = config.toMap();
+    map['updatedAt'] = FieldValue.serverTimestamp();
+    await _gameContentRef(config.boothId, 'scratch_card').set(map);
+  }
+
+  // ── Guess the Number ───────────────────────────────────────────────────
+  Future<GuessNumberConfig?> getGuessNumberConfig(String boothId) async {
+    final snap = await _gameContentRef(boothId, 'guess_number').get();
+    if (!snap.exists) return null;
+    return GuessNumberConfig.fromMap(boothId, snap.data()!);
+  }
+
+  Stream<GuessNumberConfig?> watchGuessNumberConfig(String boothId) {
+    return _gameContentRef(boothId, 'guess_number').snapshots().map((snap) =>
+        snap.exists ? GuessNumberConfig.fromMap(boothId, snap.data()!) : null);
+  }
+
+  Future<void> saveGuessNumberConfig(GuessNumberConfig config) async {
+    final map = config.toMap();
+    map['updatedAt'] = FieldValue.serverTimestamp();
+    await _gameContentRef(config.boothId, 'guess_number').set(map);
+  }
+
+  // ── Memory Cards pair images ───────────────────────────────────────────
+  Future<MemoryPairsConfig?> getMemoryPairsConfig(String boothId) async {
+    final snap = await _gameContentRef(boothId, 'memory_matrix').get();
+    if (!snap.exists) return null;
+    return MemoryPairsConfig.fromMap(boothId, snap.data()!);
+  }
+
+  Stream<MemoryPairsConfig?> watchMemoryPairsConfig(String boothId) {
+    return _gameContentRef(boothId, 'memory_matrix').snapshots().map((snap) =>
+        snap.exists ? MemoryPairsConfig.fromMap(boothId, snap.data()!) : null);
+  }
+
+  Future<void> saveMemoryPairsConfig(MemoryPairsConfig config) async {
+    final map = config.toMap();
+    map['updatedAt'] = FieldValue.serverTimestamp();
+    await _gameContentRef(config.boothId, 'memory_matrix').set(map);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  PRIZE GAMES — Spin Wheel & Scratch Card. Both draw from the same
+  //  weighted prize-mix (see PrizeSegment): a win is either an automatic
+  //  points award or a limited-stock physical prize logged to `prize_wins`
+  //  for the exhibitor to hand out in person and tick off as collected.
+  //  Respects the same per-booth play limiter as every other mini-game
+  //  (recordGamePlay) — one free play + a shared bonus, never trust the UI.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Picks one segment at random, weighted by [PrizeSegment.weight], from
+  /// only the currently-available segments (points segments are always
+  /// available; physical segments only while stock remains). Callers must
+  /// ensure [segments] is non-empty.
+  PrizeSegment _weightedPick(List<PrizeSegment> segments) {
+    final weights = segments.map((s) => s.weight > 0 ? s.weight : 0.01).toList();
+    final totalWeight = weights.fold<double>(0, (sum, w) => sum + w);
+    final roll = Random().nextDouble() * totalWeight;
+    double cumulative = 0;
+    for (var i = 0; i < segments.length; i++) {
+      cumulative += weights[i];
+      if (roll <= cumulative) return segments[i];
+    }
+    return segments.last; // floating-point safety net
+  }
+
+  /// Validates the play limit, atomically draws a weighted prize from
+  /// [boothId]'s [gameType] ('spin_wheel' or 'scratch_card') content —
+  /// decrementing stock server-side if it's a limited physical prize so two
+  /// simultaneous plays can never both win the last unit — then pays out
+  /// points immediately or logs a `prize_wins` entry for physical prizes.
+  Future<PrizeWinResult> playPrizeGame({
+    required String uid,
+    required String userName,
+    required String boothId,
+    required String gameType,
+  }) async {
+    final allowed = await recordGamePlay(uid, boothId, gameType);
+    if (!allowed) return const PrizeWinResult.failure('play_limit_reached');
+
+    final contentRef = _gameContentRef(boothId, gameType);
+    final picked = await _db.runTransaction<PrizeSegment?>((tx) async {
+      final snap = await tx.get(contentRef);
+      if (!snap.exists) return null;
+      final segments = (snap.data()!['segments'] as List<dynamic>? ?? [])
+          .map((s) => PrizeSegment.fromMap(Map<String, dynamic>.from(s)))
+          .toList();
+      final available = segments.where((s) => s.isAvailable).toList();
+      if (available.isEmpty) return null;
+
+      final segment = _weightedPick(available);
+      if (segment.isPhysical) {
+        final updated = segments
+            .map((s) => s.id == segment.id
+                ? s.copyWith(remainingStock: s.remainingStock - 1)
+                : s)
+            .toList();
+        tx.update(contentRef, {'segments': updated.map((s) => s.toMap()).toList()});
+      }
+      return segment;
+    });
+
+    if (picked == null) return const PrizeWinResult.failure('no_prizes_available');
+
+    if (picked.isPoints) {
+      if (picked.pointsValue > 0) {
+        await addPoints(uid, userName, picked.pointsValue, gameType: gameType);
+      }
+    } else {
+      await _db.collection('prize_wins').add({
+        'uid': uid,
+        'userName': userName,
+        'boothId': boothId,
+        'gameType': gameType,
+        'prizeLabel': picked.label,
+        'collected': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await logGameSession(uid, gameType, picked.isPoints ? picked.pointsValue : 0,
+        exhibitorId: boothId);
+    return PrizeWinResult.win(picked);
+  }
+
+  /// Physical-prize wins for [boothId], newest first — the exhibitor's
+  /// "Prize Wins" hand-out checklist.
+  Stream<List<PrizeWinModel>> getPrizeWins(String boothId) {
+    return _db
+        .collection('prize_wins')
+        .where('boothId', isEqualTo: boothId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => PrizeWinModel.fromMap(d.id, d.data())).toList());
+  }
+
+  /// Ticks a physical prize win as handed out in person (or un-ticks it).
+  Future<void> markPrizeCollected(String winId, bool collected) async {
+    await _db.collection('prize_wins').doc(winId).update({'collected': collected});
+  }
 }
 
 /// Result of a redemption attempt — [success] is null-safe to check first;
@@ -1302,9 +1549,72 @@ class RedemptionOutcome {
         redemptionId = null;
 }
 
+/// Result of [FirestoreService.playPrizeGame] — [success] is null-safe to
+/// check first; [segment] (the won prize) is only set on success,
+/// [failureReason] ('play_limit_reached' or 'no_prizes_available') only on
+/// failure.
+class PrizeWinResult {
+  final bool success;
+  final PrizeSegment? segment;
+  final String? failureReason;
+
+  const PrizeWinResult.win(this.segment)
+      : success = true,
+        failureReason = null;
+  const PrizeWinResult.failure(this.failureReason)
+      : success = false,
+        segment = null;
+}
+
 /// Result of [FirestoreService.registerDailyVisit].
 class DailyVisitResult {
   final int streak;
   final bool isNewDay;
   const DailyVisitResult({required this.streak, required this.isNewDay});
+}
+
+/// One visitor's shared game-attempt pool at one booth — see the
+/// "PER-BOOTH SHARED ATTEMPT POOL" section of [FirestoreService] for the
+/// full design. Read via [FirestoreService.watchAttemptPool]/
+/// [FirestoreService.remainingAttempts]; written via
+/// [FirestoreService.recordGamePlay]/[FirestoreService.checkInBooth]/
+/// [FirestoreService.creditFollowTask]/[FirestoreService.setMinigameTaskKeys].
+class BoothAttemptPool {
+  final int attemptsUsed;
+  final bool checkinEarned;
+  final bool followEarned;
+  final bool minigameEarned;
+  /// The up-to-2 generic game types currently named on the "Play a
+  /// Mini-Game" booth task (see setMinigameTaskKeys) — used by
+  /// recordGamePlay to know which finished game credits minigameEarned.
+  final List<String> taskGameKeys;
+
+  const BoothAttemptPool({
+    this.attemptsUsed = 0,
+    this.checkinEarned = false,
+    this.followEarned = false,
+    this.minigameEarned = false,
+    this.taskGameKeys = const [],
+  });
+
+  factory BoothAttemptPool.fromMap(Map<String, dynamic>? map) {
+    if (map == null) return const BoothAttemptPool();
+    return BoothAttemptPool(
+      attemptsUsed: (map['attemptsUsed'] as num?)?.toInt() ?? 0,
+      checkinEarned: map['checkinEarned'] == true,
+      followEarned: map['followEarned'] == true,
+      minigameEarned: map['minigameEarned'] == true,
+      taskGameKeys: List<String>.from(map['taskGameKeys'] ?? const []),
+    );
+  }
+
+  /// 1 baseline + up to 3 more from check-in/follow/mini-game tasks — max 4.
+  int get attemptsGranted =>
+      1 +
+      (checkinEarned ? 1 : 0) +
+      (followEarned ? 1 : 0) +
+      (minigameEarned ? 1 : 0);
+
+  int get attemptsRemaining =>
+      (attemptsGranted - attemptsUsed).clamp(0, attemptsGranted);
 }

@@ -8,9 +8,11 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/firestore_service.dart';
 import '../admin/manage_lucky_draw_screen.dart';
 import '../admin/manage_quiz_screen.dart';
+import '../auth/role_choice_screen.dart';
 import 'exhibitor_analytics_screen.dart';
 import 'exhibitor_booth_editor_screen.dart';
 import 'exhibitor_game_config_screen.dart';
+import 'exhibitor_prize_wins_screen.dart';
 import 'exhibitor_qr_screen.dart';
 
 /// Hub screen for an exhibitor's own booth. Everything reachable from here
@@ -42,9 +44,20 @@ class ExhibitorDashboardScreen extends StatelessWidget {
                 if (context.mounted) {
                   Navigator.pushReplacementNamed(context, AppRoutes.login);
                 }
+              } else if (v == 'switch_role') {
+                // An exhibitor switching roles can only be switching TO
+                // Visitor — hide the Exhibitor card on the screen they
+                // land on (see RoleChoiceScreen.hideRole). The actual
+                // logout-and-confirm happens when they tap the Visitor
+                // card there, not here.
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) =>
+                        const RoleChoiceScreen(hideRole: 'exhibitor')));
               }
             },
             itemBuilder: (_) => [
+              const PopupMenuItem(
+                  value: 'switch_role', child: Text('Switch Role')),
               const PopupMenuItem(value: 'logout', child: Text('Logout')),
             ],
           ),
@@ -170,6 +183,19 @@ class ExhibitorDashboardScreen extends StatelessWidget {
                               MaterialPageRoute(
                                 builder: (_) =>
                                     ExhibitorQrScreen(boothId: boothId),
+                              ),
+                            ),
+                          ),
+                          _DashCard(
+                            icon: Icons.card_giftcard_rounded,
+                            title: 'Prize Wins',
+                            subtitle: 'Hand-out checklist',
+                            color: AppColors.spinWheelColor,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ExhibitorPrizeWinsScreen(boothId: boothId),
                               ),
                             ),
                           ),

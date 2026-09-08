@@ -1,8 +1,13 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/game_types.dart';
 import '../../core/models/exhibitor_model.dart';
 import '../../core/models/quiz_model.dart';
 import '../../core/models/lucky_draw_model.dart';
@@ -15,12 +20,18 @@ import '../games/memory_matrix_screen.dart';
 import '../games/code_breaker_screen.dart';
 import '../games/rgb_master_screen.dart';
 import '../games/speed_typing_screen.dart';
+import '../games/spin_wheel_screen.dart';
+import '../games/scratch_card_screen.dart';
+import '../games/guess_number_screen.dart';
+import '../../core/models/game_content_model.dart';
 
 /// The themed landing page a visitor lands on after scanning a booth's QR
 /// code — shows that exhibitor's customization (banner/colors/welcome
 /// message) and only the games this booth has enabled. Auto check-in fires
 /// on entry, matching the manual "Check In" flow on the Exhibitors list
-/// (earns +1 shared bonus play at this booth on first visit).
+/// (earns +1 attempt in this booth's shared pool on first visit — see
+/// BoothAttemptPool). Also (re-)assigns the "Play a Mini-Game" task's 2
+/// named games fresh on every open — see _assignMinigameTasks.
 class BoothScreen extends StatefulWidget {
   const BoothScreen({super.key, required this.exhibitor});
 
@@ -47,6 +58,10 @@ class _BoothScreenState extends State<BoothScreen> {
       if (mounted) setState(() => _checkingIn = false);
       return;
     }
+    // Fire the mini-game task's fresh random assignment alongside check-in
+    // — independent of whether this is a new check-in, since it's meant to
+    // re-roll every time the visitor opens this booth.
+    unawaited(_assignMinigameTasks(uid));
     try {
       final isNew = await _fs.checkInBooth(uid, widget.exhibitor.id);
       if (!mounted) return;
@@ -58,12 +73,41 @@ class _BoothScreenState extends State<BoothScreen> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content:
-                  Text('✅ Checked in! +1 bonus play earned at this booth.')));
+              content: Text('✅ Checked in! +1 attempt earned at this booth.')));
         });
       }
     } catch (_) {
       if (mounted) setState(() => _checkingIn = false);
+    }
+  }
+
+  /// Picks (or re-rolls) the up-to-2 generic games named on the "Play a
+  /// Mini-Game" booth task, from whichever of this booth's generic games
+  /// are currently enabled — see FirestoreService.setMinigameTaskKeys.
+  Future<void> _assignMinigameTasks(String uid) async {
+    final eligible = kGenericBoothGames
+        .where((g) => widget.exhibitor.configFor(g.key).enabled)
+        .map((g) => g.key)
+        .toList();
+    try {
+      await _fs.setMinigameTaskKeys(uid, widget.exhibitor.id, eligible);
+    } catch (_) {
+      // Non-critical — the Booth Tasks section simply won't show a
+      // mini-game task this visit if this fails.
+    }
+  }
+
+  /// Opens [rawUrl] in an external browser/app, prefixing `https://` when
+  /// the exhibitor saved a bare domain (e.g. "facebook.com/acme").
+  Future<void> _openLink(String rawUrl) async {
+    final hasScheme = rawUrl.startsWith('http://') || rawUrl.startsWith('https://');
+    final uri = Uri.tryParse(hasScheme ? rawUrl : 'https://$rawUrl');
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Best-effort — nothing to show the visitor if their device has no
+      // app/browser able to handle it.
     }
   }
 
@@ -185,7 +229,7 @@ class _BoothScreenState extends State<BoothScreen> {
                         Icon(Icons.check_circle_rounded, color: AppColors.success),
                         SizedBox(width: 8),
                         Expanded(
-                          child: Text('Checked in — +1 bonus play earned!',
+                          child: Text('Checked in — +1 attempt earned!',
                               style: TextStyle(
                                   color: AppColors.success,
                                   fontWeight: FontWeight.w700)),
@@ -249,60 +293,111 @@ class _BoothScreenState extends State<BoothScreen> {
           ),
           // Instant challenges — only the games this exhibitor has enabled
           // for their booth (see ExhibitorGameConfigScreen), themed with
-          // their color. Each tile shows whether the visitor still has a
-          // free play or bonus play left here — the real gate is
+          // their color. Every tile shows the SAME shared-pool "attempts
+          // left" count (see BoothAttemptPool) — the real gate is
           // FirestoreService.recordGamePlay, fired when the round ends.
-          Builder(builder: (context) {
-            final defs = <_GameDef>[
-              _GameDef('reflex_tap', '⚡', 'Reflex Tap',
-                  (accent) => ReflexTapScreen(accentColor: accent, exhibitorId: ex.id)),
-              _GameDef('memory_matrix', '🧠', 'Memory Matrix',
-                  (accent) => MemoryMatrixScreen(accentColor: accent, exhibitorId: ex.id)),
-              _GameDef('code_breaker', '🔐', 'Code Breaker',
-                  (accent) => CodeBreakerScreen(accentColor: accent, exhibitorId: ex.id)),
-              _GameDef('rgb_master', '🎨', 'RGB Master',
-                  (accent) => RgbMasterScreen(accentColor: accent, exhibitorId: ex.id)),
-              _GameDef('speed_typing', '⌨️', 'Speed Typing',
-                  (accent) => SpeedTypingScreen(accentColor: accent, exhibitorId: ex.id)),
-              _GameDef('puzzle', '🧩', 'Slide Puzzle',
-                  (accent) => PuzzleScreen(exhibitorId: ex.id)),
-            ].where((d) => ex.configFor(d.gameType).enabled).toList();
+          StreamBuilder<BoothAttemptPool>(
+            stream: uid == null ? null : _fs.watchAttemptPool(uid, ex.id),
+            builder: (context, poolSnap) {
+              final pool = poolSnap.data;
+              final defs = _genericGameDefs(ex.id)
+                  .where((d) => ex.configFor(d.gameType).enabled)
+                  .toList();
 
-            if (defs.isEmpty) {
-              return const SliverToBoxAdapter(child: SizedBox.shrink());
-            }
+              if (defs.isEmpty) {
+                return const SliverToBoxAdapter(child: SizedBox.shrink());
+              }
 
-            return SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.2,
+              return SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.2,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) {
+                      final d = defs[i];
+                      final points = ex.configFor(d.gameType).points;
+                      return _ChallengeTile(
+                        emoji: d.emoji,
+                        title: d.title,
+                        color: color,
+                        points: points,
+                        remaining: uid == null ? null : pool?.attemptsRemaining,
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => d.builder(color))),
+                      );
+                    },
+                    childCount: defs.length,
+                  ),
                 ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, i) {
-                    final d = defs[i];
-                    final points = ex.configFor(d.gameType).points;
-                    return _ChallengeTile(
-                      emoji: d.emoji,
-                      title: d.title,
-                      color: color,
-                      points: points,
-                      remainingPlays: uid == null
-                          ? null
-                          : _fs.remainingPlays(uid, ex.id, d.gameType),
-                      onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => d.builder(color))),
-                    );
-                  },
-                  childCount: defs.length,
-                ),
-              ),
-            );
-          }),
+              );
+            },
+          ),
+          // 🎯 Booth Tasks — earn up to 2 more shared attempts at this
+          // booth: +1 for following the exhibitor (any one of Facebook/
+          // Instagram/Website), +1 for finishing a round of either of the
+          // 2 mini-games named below (see _assignMinigameTasks). Hidden
+          // entirely if this booth has neither a follow link nor an
+          // enabled generic game to offer.
+          if (uid != null)
+            StreamBuilder<BoothAttemptPool>(
+              stream: _fs.watchAttemptPool(uid, ex.id),
+              builder: (context, poolSnap) {
+                final pool = poolSnap.data ?? const BoothAttemptPool();
+                final taskDefs = _genericGameDefs(ex.id)
+                    .where((d) => pool.taskGameKeys.contains(d.gameType))
+                    .toList();
+                final showFollow = ex.hasFollowLinks;
+                final showMinigame = taskDefs.isNotEmpty;
+                if (!showFollow && !showMinigame) {
+                  return const SliverToBoxAdapter(child: SizedBox.shrink());
+                }
+                return SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('🎯 Booth Tasks',
+                            style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textDark)),
+                        const SizedBox(height: 4),
+                        const Text(
+                            'Complete these to earn extra attempts at this booth.',
+                            style: TextStyle(
+                                fontSize: 12, color: AppColors.textMedium)),
+                        const SizedBox(height: 10),
+                        if (showFollow)
+                          _FollowTaskCard(
+                            exhibitor: ex,
+                            color: color,
+                            earned: pool.followEarned,
+                            onTapLink: (url) async {
+                              await _openLink(url);
+                              await _fs.creditFollowTask(uid, ex.id);
+                            },
+                          ),
+                        if (showMinigame)
+                          _MinigameTaskCard(
+                            defs: taskDefs,
+                            color: color,
+                            earned: pool.minigameEarned,
+                            onPlay: (d) => Navigator.push(context,
+                                MaterialPageRoute(builder: (_) => d.builder(color))),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           // Booth-specific quizzes (exhibitor-authored content)
           SliverToBoxAdapter(
             child: StreamBuilder<List<QuizModel>>(
@@ -371,6 +466,121 @@ class _BoothScreenState extends State<BoothScreen> {
               },
             ),
           ),
+          // Spin Wheel — only shown once the exhibitor has set up prizes
+          // for it (see ManageSpinWheelScreen). One booth's wheel is
+          // never themed like another's — see SpinWheelScreen's own
+          // per-booth color rotation.
+          SliverToBoxAdapter(
+            child: StreamBuilder<SpinWheelConfig?>(
+              stream: _fs.watchSpinWheelConfig(ex.id),
+              builder: (context, snap) {
+                final config = snap.data;
+                if (config == null || !config.hasAvailablePrize) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('🎡 Spin Wheel',
+                          style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textDark)),
+                      const SizedBox(height: 10),
+                      _GameTile(
+                        icon: Icons.casino_rounded,
+                        color: AppColors.spinWheelColor,
+                        title: 'Spin to Win',
+                        subtitle: '${config.segments.length} prizes up for grabs',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => SpinWheelScreen(
+                                    accentColor: color, exhibitorId: ex.id))),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          // Scratch Card — same "only if configured" gating as Spin Wheel.
+          SliverToBoxAdapter(
+            child: StreamBuilder<ScratchCardConfig?>(
+              stream: _fs.watchScratchCardConfig(ex.id),
+              builder: (context, snap) {
+                final config = snap.data;
+                if (config == null || !config.hasAvailablePrize) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('🪙 Scratch Card',
+                          style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textDark)),
+                      const SizedBox(height: 10),
+                      _GameTile(
+                        icon: Icons.card_giftcard_rounded,
+                        color: AppColors.scratchCardColor,
+                        title: 'Scratch & Win',
+                        subtitle: config.revealMessage,
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => ScratchCardScreen(
+                                    accentColor: color, exhibitorId: ex.id))),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          // Guess the Number — same "only if configured" gating.
+          SliverToBoxAdapter(
+            child: StreamBuilder<GuessNumberConfig?>(
+              stream: _fs.watchGuessNumberConfig(ex.id),
+              builder: (context, snap) {
+                final config = snap.data;
+                if (config == null || !config.hasContent) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('🔢 Guess the Number',
+                          style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textDark)),
+                      const SizedBox(height: 10),
+                      _GameTile(
+                        icon: Icons.pin_rounded,
+                        color: AppColors.guessNumberColor,
+                        title: 'Guess the Number',
+                        subtitle:
+                            '${config.minValue}–${config.maxValue} · +${config.rewardPoints} points',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => GuessNumberScreen(
+                                    accentColor: color, exhibitorId: ex.id))),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
           if (ex.contactEmail.isNotEmpty ||
               ex.contactPhone.isNotEmpty ||
@@ -422,6 +632,25 @@ class _GameDef {
   final Widget Function(Color accent) builder;
 }
 
+/// All 6 generic booth games (unfiltered by whether this booth has them
+/// enabled) — shared by the Instant Challenges grid (filtered to enabled
+/// games) and the Booth Tasks mini-game card (filtered to
+/// BoothAttemptPool.taskGameKeys).
+List<_GameDef> _genericGameDefs(String exId) => [
+      _GameDef('reflex_tap', '⚡', 'Reflex Tap',
+          (accent) => ReflexTapScreen(accentColor: accent, exhibitorId: exId)),
+      _GameDef('memory_matrix', '🃏', 'Memory Cards',
+          (accent) => MemoryMatrixScreen(accentColor: accent, exhibitorId: exId)),
+      _GameDef('code_breaker', '🔐', 'Code Breaker',
+          (accent) => CodeBreakerScreen(accentColor: accent, exhibitorId: exId)),
+      _GameDef('rgb_master', '🎨', 'RGB Master',
+          (accent) => RgbMasterScreen(accentColor: accent, exhibitorId: exId)),
+      _GameDef('speed_typing', '⌨️', 'Speed Typing',
+          (accent) => SpeedTypingScreen(accentColor: accent, exhibitorId: exId)),
+      _GameDef('puzzle', '🧩', 'Slide Puzzle',
+          (accent) => PuzzleScreen(exhibitorId: exId)),
+    ];
+
 class _ChallengeTile extends StatefulWidget {
   const _ChallengeTile({
     required this.emoji,
@@ -429,7 +658,7 @@ class _ChallengeTile extends StatefulWidget {
     required this.color,
     required this.points,
     required this.onTap,
-    this.remainingPlays,
+    this.remaining,
   });
 
   final String emoji;
@@ -437,12 +666,14 @@ class _ChallengeTile extends StatefulWidget {
   final Color color;
   final int points;
   final VoidCallback onTap;
-  /// Null when there's no signed-in visitor to check (still tappable, just
-  /// no status badge). Resolves to 0 once the free play + any bonus at this
-  /// booth are used up — the tile then shows "Played" instead of a points
-  /// badge, but tapping still works (the real gate fires when the round
-  /// ends and submitGameScore's recordGamePlay call rejects it).
-  final Future<int>? remainingPlays;
+  /// Attempts left in this booth's SHARED pool (see BoothAttemptPool) —
+  /// the same number on every tile at this booth, not per-game. Null when
+  /// there's no signed-in visitor to check yet (still tappable, just no
+  /// status badge). 0 once the pool is exhausted — the tile then shows "No
+  /// attempts left" instead of a points badge, but tapping still works
+  /// (the real gate fires when the round ends and submitGameScore's
+  /// recordGamePlay call rejects it).
+  final int? remaining;
 
   @override
   State<_ChallengeTile> createState() => _ChallengeTileState();
@@ -453,6 +684,8 @@ class _ChallengeTileState extends State<_ChallengeTile> {
 
   @override
   Widget build(BuildContext context) {
+    final remaining = widget.remaining;
+    final locked = remaining == 0;
     return GestureDetector(
       onTapDown: (_) => setState(() => _scale = 0.94),
       onTapCancel: () => setState(() => _scale = 1.0),
@@ -480,22 +713,11 @@ class _ChallengeTileState extends State<_ChallengeTile> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(widget.emoji, style: const TextStyle(fontSize: 26)),
-                  if (widget.remainingPlays != null)
-                    FutureBuilder<int>(
-                      future: widget.remainingPlays,
-                      builder: (context, snap) {
-                        if (!snap.hasData) return const SizedBox.shrink();
-                        final locked = snap.data == 0;
-                        return Icon(
-                          locked
-                              ? Icons.lock_rounded
-                              : Icons.play_circle_fill_rounded,
-                          size: 16,
-                          color: locked
-                              ? AppColors.textMedium
-                              : widget.color,
-                        );
-                      },
+                  if (remaining != null)
+                    Icon(
+                      locked ? Icons.lock_rounded : Icons.play_circle_fill_rounded,
+                      size: 16,
+                      color: locked ? AppColors.textMedium : widget.color,
                     ),
                 ],
               ),
@@ -504,22 +726,15 @@ class _ChallengeTileState extends State<_ChallengeTile> {
                       fontSize: 13.5,
                       fontWeight: FontWeight.w800,
                       color: widget.color)),
-              if (widget.remainingPlays != null)
-                FutureBuilder<int>(
-                  future: widget.remainingPlays,
-                  builder: (context, snap) {
-                    if (!snap.hasData) return const SizedBox.shrink();
-                    final locked = snap.data == 0;
-                    return Text(
-                      locked ? 'Played' : 'Up to ${widget.points} pts',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: locked
-                              ? AppColors.textMedium
-                              : widget.color.withOpacity(0.8)),
-                    );
-                  },
+              if (remaining != null)
+                Text(
+                  locked ? 'No attempts left' : '$remaining left · +${widget.points} pts',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: locked
+                          ? AppColors.textMedium
+                          : widget.color.withOpacity(0.8)),
                 ),
             ],
           ),
@@ -585,4 +800,162 @@ class _ContactRow extends StatelessWidget {
                       fontSize: 13, color: AppColors.textMedium))),
         ]),
       );
+}
+
+/// "Follow the Exhibitor" Booth Task card — up to 3 sub-tasks (Facebook,
+/// Instagram, Website), each shown only when the exhibitor has set that
+/// link. Tapping ANY ONE opens the link and credits +1 attempt; the
+/// category caps at +1 total regardless of how many are tapped.
+class _FollowTaskCard extends StatelessWidget {
+  const _FollowTaskCard({
+    required this.exhibitor,
+    required this.color,
+    required this.earned,
+    required this.onTapLink,
+  });
+
+  final ExhibitorModel exhibitor;
+  final Color color;
+  final bool earned;
+  final Future<void> Function(String url) onTapLink;
+
+  @override
+  Widget build(BuildContext context) {
+    final links = <(IconData, String, String)>[
+      if (exhibitor.hasFacebook)
+        (Icons.facebook_rounded, 'Facebook', exhibitor.facebookUrl),
+      if (exhibitor.hasInstagram)
+        (Icons.camera_alt_rounded, 'Instagram', exhibitor.instagramUrl),
+      if (exhibitor.website.isNotEmpty)
+        (Icons.language_rounded, 'Website', exhibitor.website),
+    ];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('Follow the Exhibitor',
+                    style: TextStyle(fontWeight: FontWeight.w800, color: color)),
+              ),
+              if (earned)
+                const Icon(Icons.check_circle_rounded,
+                    color: AppColors.success, size: 18),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            earned
+                ? 'Earned +1 attempt ✅'
+                : 'Tap any one below to earn +1 attempt',
+            style: const TextStyle(fontSize: 11.5, color: AppColors.textMedium),
+          ),
+          const SizedBox(height: 8),
+          ...links.map((l) => InkWell(
+                onTap: () => onTapLink(l.$3),
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Icon(l.$1, size: 18, color: color),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text('Earn 1 attempt when you visit our ${l.$2}',
+                            style: const TextStyle(
+                                fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      ),
+                      const Icon(Icons.open_in_new_rounded,
+                          size: 14, color: AppColors.textMedium),
+                    ],
+                  ),
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Play a Mini-Game" Booth Task card — up to 2 dynamically-named games
+/// (see BoothAttemptPool.taskGameKeys / _assignMinigameTasks). Finishing a
+/// full round of either credits +1 attempt automatically (handled
+/// server-side by FirestoreService.recordGamePlay) — tapping a row here
+/// just opens the same game screen as its Instant Challenges tile.
+class _MinigameTaskCard extends StatelessWidget {
+  const _MinigameTaskCard({
+    required this.defs,
+    required this.color,
+    required this.earned,
+    required this.onPlay,
+  });
+
+  final List<_GameDef> defs;
+  final Color color;
+  final bool earned;
+  final void Function(_GameDef def) onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('Play a Mini-Game',
+                    style: TextStyle(fontWeight: FontWeight.w800, color: color)),
+              ),
+              if (earned)
+                const Icon(Icons.check_circle_rounded,
+                    color: AppColors.success, size: 18),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            earned
+                ? 'Earned +1 attempt ✅'
+                : 'Finish either round below to earn +1 attempt',
+            style: const TextStyle(fontSize: 11.5, color: AppColors.textMedium),
+          ),
+          const SizedBox(height: 8),
+          ...defs.map((d) => InkWell(
+                onTap: () => onPlay(d),
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Text(d.emoji, style: const TextStyle(fontSize: 18)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text('Play the mini-game (${d.title})',
+                            style: const TextStyle(
+                                fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded,
+                          size: 12, color: AppColors.textMedium),
+                    ],
+                  ),
+                ),
+              )),
+        ],
+      ),
+    );
+  }
 }

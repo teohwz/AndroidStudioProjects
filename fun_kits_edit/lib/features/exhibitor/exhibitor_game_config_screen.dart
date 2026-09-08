@@ -4,11 +4,18 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/game_types.dart';
 import '../../core/models/exhibitor_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../admin/manage_spin_wheel_screen.dart';
+import '../admin/manage_scratch_card_screen.dart';
+import '../admin/manage_guess_number_screen.dart';
+import '../admin/manage_memory_cards_screen.dart';
 
 /// Enable/disable each of the 6 generic booth games and set how many
 /// points completing it awards at THIS booth. Quiz and Lucky Draw aren't
 /// here — creating one already means "enabled", and their points are set
-/// per-quiz/per-draw in their own forms.
+/// per-quiz/per-draw in their own forms. The "wow" prize games (Spin Wheel,
+/// Scratch Card, Guess the Number) live in their own section below — each
+/// only shows up on the visitor's booth screen once its own "Customize"
+/// editor has real content saved, so there's no enable switch for them.
 class ExhibitorGameConfigScreen extends StatelessWidget {
   const ExhibitorGameConfigScreen({super.key, required this.boothId});
 
@@ -52,7 +59,41 @@ class ExhibitorGameConfigScreen extends StatelessWidget {
                   emoji: g.emoji,
                   config: booth.configFor(g.key),
                   fs: fs,
+                  customizeBuilder: g.key == 'memory_matrix'
+                      ? (context) => ManageMemoryCardsScreen(boothId: boothId)
+                      : null,
                 ),
+              const Padding(
+                padding: EdgeInsets.only(top: 8, bottom: 12),
+                child: Text('Prize Games 🎁',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'These only appear on your booth once you\'ve customized '
+                  'them below — set up their prizes to switch them on.',
+                  style: TextStyle(color: AppColors.textMedium, fontSize: 12),
+                ),
+              ),
+              _PrizeGameCard(
+                emoji: '🎡',
+                label: 'Spin Wheel',
+                color: AppColors.spinWheelColor,
+                builder: (context) => ManageSpinWheelScreen(boothId: boothId),
+              ),
+              _PrizeGameCard(
+                emoji: '🪙',
+                label: 'Scratch Card',
+                color: AppColors.scratchCardColor,
+                builder: (context) => ManageScratchCardScreen(boothId: boothId),
+              ),
+              _PrizeGameCard(
+                emoji: '🔢',
+                label: 'Guess the Number',
+                color: AppColors.guessNumberColor,
+                builder: (context) => ManageGuessNumberScreen(boothId: boothId),
+              ),
             ],
           );
         },
@@ -69,6 +110,7 @@ class _GameConfigCard extends StatefulWidget {
     required this.emoji,
     required this.config,
     required this.fs,
+    this.customizeBuilder,
   });
 
   final String boothId;
@@ -77,6 +119,9 @@ class _GameConfigCard extends StatefulWidget {
   final String emoji;
   final BoothGameConfig config;
   final FirestoreService fs;
+  /// When set, shows a "Customize" button that pushes this screen — used
+  /// only by Memory Matrix right now, for its pair images.
+  final WidgetBuilder? customizeBuilder;
 
   @override
   State<_GameConfigCard> createState() => _GameConfigCardState();
@@ -176,6 +221,62 @@ class _GameConfigCardState extends State<_GameConfigCard> {
               if (_dirty)
                 TextButton(onPressed: _save, child: const Text('Save')),
             ],
+          ),
+          if (widget.customizeBuilder != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: widget.customizeBuilder!)),
+                icon: const Icon(Icons.image_outlined, size: 16),
+                label: const Text('Customize Images'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One of the "wow" prize games — no enable switch, just a button through
+/// to that game's own content editor (its Firestore doc's existence is
+/// what actually turns it on for visitors).
+class _PrizeGameCard extends StatelessWidget {
+  const _PrizeGameCard({
+    required this.emoji,
+    required this.label,
+    required this.color,
+    required this.builder,
+  });
+
+  final String emoji;
+  final String label;
+  final Color color;
+  final WidgetBuilder builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Row(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 20)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.push(
+                context, MaterialPageRoute(builder: builder)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: color, foregroundColor: Colors.white),
+            child: const Text('Customize'),
           ),
         ],
       ),

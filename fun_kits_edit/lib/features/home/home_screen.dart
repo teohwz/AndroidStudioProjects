@@ -12,6 +12,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/firestore_service.dart';
 import '../../app/routes.dart';
 import '../auth/role_choice_screen.dart';
+import '../auth/visitor_register_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════════════
 //  LEVEL SYSTEM — purely client-side, derived from totalPoints. No new
@@ -472,13 +473,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     AppRoutes.visitorLogin, (route) => false);
               }
             } else if (v == 'switch_role') {
-              Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const RoleChoiceScreen()));
+              // A visitor switching roles can only be switching TO
+              // Exhibitor — hide the Visitor card on the screen they land
+              // on (see RoleChoiceScreen.hideRole).
+              Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const RoleChoiceScreen(hideRole: 'visitor')));
+            } else if (v == 'register') {
+              Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const VisitorRegisterScreen()));
             }
           },
           itemBuilder: (_) => [
             const PopupMenuItem(
                 value: 'switch_role', child: Text('Switch Role')),
+            if (auth.isAnonymous)
+              const PopupMenuItem(value: 'register', child: Text('Register')),
             if (!auth.isAnonymous)
               const PopupMenuItem(value: 'logout', child: Text('Logout')),
           ],

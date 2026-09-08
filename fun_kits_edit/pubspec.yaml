@@ -51,6 +51,14 @@ dependencies:
   # Android, so a real save needs this dedicated native API instead.
   gal: ^2.3.0
 
+  # New "wow" mini-games — animated prize wheel and scratch-to-reveal card
+  flutter_fortune_wheel: ^1.3.2
+  scratcher: ^2.5.0
+
+  # Opens the exhibitor's Facebook/Instagram/Website links from the
+  # "Follow the Exhibitor" booth task
+  url_launcher: ^6.3.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -8,14 +8,23 @@ import 'visitor_register_screen.dart';
 
 /// The very first screen a brand-new device ever sees (see app.dart's
 /// bootstrap logic, which shows this only when there's no current Firebase
-/// session AND no persisted "last login mode" from a previous logout).
-/// Also reachable any time afterward via "Switch Role" in Home's menu —
-/// nothing here is destructive: picking "Exhibitor" just opens the existing
-/// sign-in form, and picking "Visitor" only ensures an anonymous session
-/// exists (creating one silently if this is truly the first time) before
-/// handing off to the register/skip screen.
+/// session AND no persisted "last login mode" from a previous logout) —
+/// reached that way with [hideRole] left null, showing both cards.
+/// Also reachable any time afterward via "Switch Role" in Home's menu (a
+/// visitor) or the Exhibitor Dashboard's menu (an exhibitor) — those two
+/// callers pass [hideRole] so this screen only ever offers the *other*
+/// role, never the one already signed in. Nothing here is destructive for
+/// a visitor switching to Exhibitor (that just opens the existing sign-in
+/// form); an exhibitor switching to Visitor is different — see
+/// [_continueAsVisitor], which confirms and logs them out first.
 class RoleChoiceScreen extends StatefulWidget {
-  const RoleChoiceScreen({super.key});
+  const RoleChoiceScreen({super.key, this.hideRole});
+
+  /// 'visitor' hides the "I am a Visitor" card (used when a visitor is the
+  /// one switching — they can only switch TO Exhibitor); 'exhibitor' hides
+  /// the "I am an Exhibitor" card (used when an exhibitor is switching —
+  /// only TO Visitor). Null (the bootstrap/pre-login case) shows both.
+  final String? hideRole;
 
   @override
   State<RoleChoiceScreen> createState() => _RoleChoiceScreenState();
@@ -26,11 +35,43 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen> {
 
   Future<void> _continueAsVisitor() async {
     final auth = context.read<AuthService>();
-    setState(() => _busy = true);
+    // An exhibitor (or Super Admin) reaching this card is switching AWAY
+    // from a signed-in staff account, not just establishing a first
+    // session — confirm before logging them out, since ensureVisitorSession
+    // below is a no-op while any account is still signed in.
+    if (auth.isExhibitor || auth.isSuperAdmin) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Switch to Visitor?'),
+          content: const Text(
+              "You'll be logged out of your exhibitor account to continue "
+              'as a visitor.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Log Out & Continue'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      if (!mounted) return;
+      setState(() => _busy = true);
+      await auth.logout();
+      if (!mounted) return;
+    } else {
+      setState(() => _busy = true);
+    }
     // Visitors never see a login wall — this silently establishes the
     // anonymous session before the register/skip screen appears, so its
     // "Skip — Continue as Guest" button has something to proceed with
-    // immediately.
+    // immediately. (A no-op if some account is already signed in — which
+    // after the exhibitor branch above, it no longer is.)
     await auth.ensureVisitorSession();
     if (!mounted) return;
     setState(() => _busy = false);
@@ -53,6 +94,8 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen> {
   @override
   Widget build(BuildContext context) {
     final canPop = Navigator.of(context).canPop();
+    final showExhibitorCard = widget.hideRole != 'exhibitor';
+    final showVisitorCard = widget.hideRole != 'visitor';
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       body: SafeArea(
@@ -102,22 +145,25 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen> {
                         TextStyle(fontSize: 15, color: AppColors.textMedium)),
               ),
               const SizedBox(height: 40),
-              _RoleCard(
-                emoji: '🏢',
-                title: 'I am an Exhibitor',
-                subtitle: 'Sign in to manage your booth',
-                gradient: AppColors.primaryGradient,
-                onTap: _busy ? null : _continueAsExhibitor,
-              ),
-              const SizedBox(height: 16),
-              _RoleCard(
-                emoji: '🎟️',
-                title: 'I am a Visitor',
-                subtitle: 'Play games, earn points, and win prizes',
-                gradient: AppColors.secondaryGradient,
-                isLoading: _busy,
-                onTap: _busy ? null : _continueAsVisitor,
-              ),
+              if (showExhibitorCard)
+                _RoleCard(
+                  emoji: '🏢',
+                  title: 'I am an Exhibitor',
+                  subtitle: 'Sign in to manage your booth',
+                  gradient: AppColors.primaryGradient,
+                  onTap: _busy ? null : _continueAsExhibitor,
+                ),
+              if (showExhibitorCard && showVisitorCard)
+                const SizedBox(height: 16),
+              if (showVisitorCard)
+                _RoleCard(
+                  emoji: '🎟️',
+                  title: 'I am a Visitor',
+                  subtitle: 'Play games, earn points, and win prizes',
+                  gradient: AppColors.secondaryGradient,
+                  isLoading: _busy,
+                  onTap: _busy ? null : _continueAsVisitor,
+                ),
               const Spacer(),
               const Spacer(),
             ],

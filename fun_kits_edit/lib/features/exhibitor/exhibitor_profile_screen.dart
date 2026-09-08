@@ -46,7 +46,7 @@ class _ExhibitorProfileScreenState extends State<ExhibitorProfileScreen> {
       if (isNew) {
         setState(() => _checkedInBooths = [..._checkedInBooths, ex.id]);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('✅ Checked in! +1 bonus play earned at this booth.')));
+            content: Text('✅ Checked in! +1 attempt earned at this booth.')));
       }
     }
   }
@@ -407,7 +407,7 @@ class _ExhibitorCardState extends State<_ExhibitorCard> {
                       onPressed: widget.onCheckIn,
                       icon: const Icon(Icons.qr_code_scanner_rounded,
                           size: 18),
-                      label: const Text('Check In (+1 bonus play)',
+                      label: const Text('Check In (+1 attempt)',
                           style: TextStyle(fontSize: 13)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: color,

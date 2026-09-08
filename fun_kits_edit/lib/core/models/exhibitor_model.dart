@@ -36,6 +36,11 @@ class ExhibitorModel {
   final String contactEmail;
   final String contactPhone;
   final String website;
+  /// Social links used by the visitor-facing "Follow the Exhibitor" booth
+  /// task (see booth_screen.dart) — up to 3 sub-tasks (Facebook, Instagram,
+  /// Website), each shown only when its own field here is non-empty.
+  final String facebookUrl;
+  final String instagramUrl;
   final String themeColorHex; // primary color
   final String boothNumber;
   final String category;
@@ -74,6 +79,8 @@ class ExhibitorModel {
     required this.contactEmail,
     this.contactPhone = '',
     this.website = '',
+    this.facebookUrl = '',
+    this.instagramUrl = '',
     this.themeColorHex = '#6C63FF',
     this.boothNumber = '',
     this.category = 'General',
@@ -105,6 +112,12 @@ class ExhibitorModel {
   bool get hasLogo => logoUrl.isNotEmpty;
   bool get hasBanner => bannerImageUrl.isNotEmpty;
   bool get isClaimed => ownerUid != null && ownerUid!.isNotEmpty;
+  bool get hasFacebook => facebookUrl.isNotEmpty;
+  bool get hasInstagram => instagramUrl.isNotEmpty;
+  /// Whether the "Follow the Exhibitor" booth task has anything to show —
+  /// at least one of Facebook/Instagram/Website is set.
+  bool get hasFollowLinks =>
+      hasFacebook || hasInstagram || website.isNotEmpty;
 
   /// Resolved config for one of the 6 generic games, falling back to
   /// enabled-by-default with that game's standard point value.
@@ -122,6 +135,8 @@ class ExhibitorModel {
       contactEmail: map['contactEmail'] ?? '',
       contactPhone: map['contactPhone'] ?? '',
       website: map['website'] ?? '',
+      facebookUrl: map['facebookUrl'] ?? '',
+      instagramUrl: map['instagramUrl'] ?? '',
       themeColorHex: map['themeColorHex'] ?? '#6C63FF',
       boothNumber: map['boothNumber'] ?? '',
       category: map['category'] ?? 'General',
@@ -152,6 +167,8 @@ class ExhibitorModel {
         'contactEmail': contactEmail,
         'contactPhone': contactPhone,
         'website': website,
+        'facebookUrl': facebookUrl,
+        'instagramUrl': instagramUrl,
         'themeColorHex': themeColorHex,
         'boothNumber': boothNumber,
         'category': category,
@@ -182,6 +199,8 @@ class ExhibitorModel {
         'contactEmail': contactEmail,
         'contactPhone': contactPhone,
         'website': website,
+        'facebookUrl': facebookUrl,
+        'instagramUrl': instagramUrl,
         'themeColorHex': themeColorHex,
         'secondaryColorHex': secondaryColorHex,
         'backgroundColorHex': backgroundColorHex,
@@ -196,6 +215,8 @@ class ExhibitorModel {
     String? contactEmail,
     String? contactPhone,
     String? website,
+    String? facebookUrl,
+    String? instagramUrl,
     String? themeColorHex,
     String? boothNumber,
     String? category,
@@ -218,6 +239,8 @@ class ExhibitorModel {
         contactEmail: contactEmail ?? this.contactEmail,
         contactPhone: contactPhone ?? this.contactPhone,
         website: website ?? this.website,
+        facebookUrl: facebookUrl ?? this.facebookUrl,
+        instagramUrl: instagramUrl ?? this.instagramUrl,
         themeColorHex: themeColorHex ?? this.themeColorHex,
         boothNumber: boothNumber ?? this.boothNumber,
         category: category ?? this.category,

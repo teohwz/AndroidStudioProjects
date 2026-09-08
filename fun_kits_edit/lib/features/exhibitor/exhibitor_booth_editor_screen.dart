@@ -37,6 +37,8 @@ class _ExhibitorBoothEditorScreenState
   late TextEditingController _emailCtrl;
   late TextEditingController _phoneCtrl;
   late TextEditingController _websiteCtrl;
+  late TextEditingController _facebookCtrl;
+  late TextEditingController _instagramCtrl;
   late TextEditingController _welcomeCtrl;
   String _logoUrl = '';
   String _bannerUrl = '';
@@ -54,6 +56,8 @@ class _ExhibitorBoothEditorScreenState
     _emailCtrl = TextEditingController(text: booth.contactEmail);
     _phoneCtrl = TextEditingController(text: booth.contactPhone);
     _websiteCtrl = TextEditingController(text: booth.website);
+    _facebookCtrl = TextEditingController(text: booth.facebookUrl);
+    _instagramCtrl = TextEditingController(text: booth.instagramUrl);
     _welcomeCtrl = TextEditingController(text: booth.welcomeMessage);
     _logoUrl = booth.logoUrl;
     _bannerUrl = booth.bannerImageUrl;
@@ -71,6 +75,8 @@ class _ExhibitorBoothEditorScreenState
       _emailCtrl.dispose();
       _phoneCtrl.dispose();
       _websiteCtrl.dispose();
+      _facebookCtrl.dispose();
+      _instagramCtrl.dispose();
       _welcomeCtrl.dispose();
     }
     super.dispose();
@@ -130,6 +136,8 @@ class _ExhibitorBoothEditorScreenState
       contactEmail: _emailCtrl.text.trim(),
       contactPhone: _phoneCtrl.text.trim(),
       website: _websiteCtrl.text.trim(),
+      facebookUrl: _facebookCtrl.text.trim(),
+      instagramUrl: _instagramCtrl.text.trim(),
       welcomeMessage: _welcomeCtrl.text.trim(),
       themeColorHex: _toHex(_primary),
       secondaryColorHex: _toHex(_secondary),
@@ -238,6 +246,11 @@ class _ExhibitorBoothEditorScreenState
                     keyboardType: TextInputType.emailAddress),
                 _field('Contact Phone', _phoneCtrl),
                 _field('Website', _websiteCtrl),
+                _field('Facebook URL', _facebookCtrl,
+                    hint: 'Used by the visitor "Follow the Exhibitor" task',
+                    keyboardType: TextInputType.url),
+                _field('Instagram URL', _instagramCtrl,
+                    keyboardType: TextInputType.url),
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,

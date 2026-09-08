@@ -69,6 +69,50 @@ class StorageService {
     );
   }
 
+  // ── Upload scratch card image ─────────────────────────────────────────────
+  Future<String?> uploadScratchCardImage({
+    required File imageFile,
+    required String exhibitorId,
+    void Function(double progress)? onProgress,
+  }) async {
+    return _uploadFile(
+      file: imageFile,
+      path: 'scratch_cards/$exhibitorId/card_${_uuid.v4()}.jpg',
+      onProgress: onProgress,
+    );
+  }
+
+  Future<String?> pickAndUploadScratchCardImage({
+    required String exhibitorId,
+    ImageSource source = ImageSource.gallery,
+  }) async {
+    final file = await pickImage(source: source);
+    if (file == null) return null;
+    return uploadScratchCardImage(imageFile: file, exhibitorId: exhibitorId);
+  }
+
+  // ── Upload Memory Cards pair image ────────────────────────────────────────
+  Future<String?> uploadMemoryPairImage({
+    required File imageFile,
+    required String exhibitorId,
+    void Function(double progress)? onProgress,
+  }) async {
+    return _uploadFile(
+      file: imageFile,
+      path: 'memory_pairs/$exhibitorId/pair_${_uuid.v4()}.jpg',
+      onProgress: onProgress,
+    );
+  }
+
+  Future<String?> pickAndUploadMemoryPairImage({
+    required String exhibitorId,
+    ImageSource source = ImageSource.gallery,
+  }) async {
+    final file = await pickImage(source: source);
+    if (file == null) return null;
+    return uploadMemoryPairImage(imageFile: file, exhibitorId: exhibitorId);
+  }
+
   // ── Upload any image with progress callback ───────────────────────────────
   Future<String?> _uploadFile({
     required File file,

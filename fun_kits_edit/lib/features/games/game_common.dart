@@ -14,9 +14,9 @@ final _fsCommon = FirestoreService();
 /// future per-booth analytics.
 ///
 /// Returns true if the play was recorded and points awarded, false if the
-/// visitor has already used up their free play and any bonus for this game
-/// at this booth — the caller should show [showPlayLimitDialog] instead of
-/// the normal result dialog in that case. A null/empty [exhibitorId] (a
+/// visitor has exhausted their shared attempt pool at this booth (see
+/// BoothAttemptPool) — the caller should show [showPlayLimitDialog] instead
+/// of the normal result dialog in that case. A null/empty [exhibitorId] (a
 /// game reached outside any booth context) skips the per-booth limiter
 /// entirely and always succeeds.
 Future<bool> submitGameScore(
@@ -100,10 +100,10 @@ Future<void> showGameResultDialog(
 }
 
 /// Shown instead of [showGameResultDialog] when [submitGameScore] returns
-/// false — the visitor has already used their free play (and any bonus)
-/// for this game at this booth. No "Play Again" here: another attempt would
-/// just be rejected the same way, so the only way forward is a different
-/// booth or a fresh check-in bonus at this one.
+/// false — the visitor has exhausted their shared attempt pool for this
+/// booth (see BoothAttemptPool). No "Play Again" here: another attempt
+/// would just be rejected the same way, so the only way forward is
+/// completing a booth task for more attempts, or a different booth.
 Future<void> showPlayLimitDialog(BuildContext context, {required Color color}) {
   return showDialog(
     context: context,
@@ -115,13 +115,14 @@ Future<void> showPlayLimitDialog(BuildContext context, {required Color color}) {
         children: [
           const Text('🔒', style: TextStyle(fontSize: 56)),
           const SizedBox(height: 12),
-          const Text("You've already played this at this booth",
+          const Text("You're out of attempts at this booth",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
           const Text(
-            'Check in at this booth for a bonus round, or try this game at '
-            'a different booth.',
+            "Complete this booth's tasks (follow the exhibitor, play a "
+            'featured mini-game) to earn more attempts, or try a different '
+            'booth.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.textMedium),
           ),
