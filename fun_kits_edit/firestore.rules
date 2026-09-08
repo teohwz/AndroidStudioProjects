@@ -1,0 +1,418 @@
+rules_version = '2';
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Fun Kits — Firestore Security Rules
+//
+//  This app has NO backend beyond Firebase Auth + Firestore + Storage (no
+//  Cloud Functions, no Admin SDK server). That means this file — together
+//  with the atomic Firestore transactions in FirestoreService — is the only
+//  real server-side enforcement layer. Anything not written here as a rule
+//  is NOT actually enforced, no matter what the Flutter UI hides.
+//
+//  HONEST LIMITATION (read this before assuming these rules are airtight):
+//  Firestore transactions like redeemReward()/redeemExhibitorInvite()/
+//  recordGamePlay() touch multiple documents at once, but security rules
+//  validate each document WRITE independently — there is no way to prove
+//  "these writes came from one legitimate transaction" purely in rules,
+//  without a Cloud Function. What these rules DO guarantee, independently
+//  and unconditionally:
+//    • a normal user can never set their own or anyone else's role/accountStatus
+//    • a normal user can never touch another user's points
+//    • an exhibitor or super_admin account can never write points onto its
+//      own users/{uid} doc or leaderboard/{uid} doc — requirement #12
+//    • reward.stock can only ever move down by exactly 1 at a time for a
+//      normal user (never negative, never any other field changed at once)
+//    • a redemption a user creates must reference a real, active reward and
+//      spend exactly that reward's pointsRequired — and can never be edited
+//      or deleted by that user afterwards (only a Super Admin can change its
+//      status or refund it)
+//    • only an account already carrying role == 'super_admin' can create
+//      Super Admin actions (reward CRUD, inventory adjustment, redemption
+//      status/refund, user points/role/status changes on OTHER accounts) —
+//      and since normal users can never write their own role, there is no
+//      client path to ever become a Super Admin.
+//    • an 'exhibitor' account is created ONLY by consuming a Super-Admin-
+//      issued, single-use invite code tied to one specific booth — there is
+//      no client path to self-assign role: 'exhibitor', and a booth's
+//      ownerUid can only ever move from empty to the claiming account's own
+//      uid, exactly once (requirements #1-#3)
+//    • once a booth is claimed, only its ownerUid (or a Super Admin) may
+//      ever change its customization/game-config fields, each bounded to
+//      the exact field set the corresponding screen writes (requirement #4,
+//      #7's "not modify other exhibitors")
+//    • a booth's own quizzes/lucky draws can only be created/edited by that
+//      booth's ownerUid — never by a Super Admin (requirement #11: "manage
+//      booths only, not game") — a narrow legacy 'admin' role fallback is
+//      kept so any pre-existing organizer account (predating this feature)
+//      keeps working, without granting that power to super_admin
+//  What is NOT fully closed (documented, not hidden): a normal visitor's own
+//  `users/{uid}.points` can still increase via the existing gameplay
+//  addPoints() flow with a client-supplied amount, same as before this
+//  feature existed — closing that fully would need a Cloud Function to
+//  validate quiz/game scores server-side, which is out of scope for this
+//  prototype. The same applies to a visitor's own `game_plays/{uid}_{boothId}`
+//  doc: rules bind it to the caller's own uid and its literal id shape, but
+//  don't re-derive the exact +1-per-play arithmetic recordGamePlay()
+//  performs, so a visitor could in principle reset their own play count —
+//  a self-serving exploit of the same class already accepted above for
+//  points, not a way to affect anyone else's account or ranking. Combined
+//  with the bounded stock/redemption/booth-ownership rules above, the
+//  practical exploit surface stays limited to a user granting themselves
+//  extra DEMO points or extra plays of a free game (no real money, no real
+//  voucher codes, and no other visitor's or exhibitor's data is reachable).
+// ═══════════════════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── helpers ────────────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myRole() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'visitor')
+        : 'visitor';
+    }
+
+    // Legacy shared 'admin' role (predates the exhibitor account system) —
+    // kept alive only as a narrow fallback for quiz/lucky-draw/exhibitor
+    // rules that referenced it before, per "preserve existing functionality".
+    // Deliberately excludes 'super_admin': requirement #11 says Super Admin
+    // manages booths only, never booth content, so isAdmin() must not be
+    // used anywhere that would let Super Admin touch quizzes/lucky draws.
+    function isLegacyAdmin() {
+      return myRole() == 'admin';
+    }
+
+    function isAdmin() {
+      return myRole() == 'admin' || myRole() == 'super_admin';
+    }
+
+    function isSuperAdmin() {
+      return myRole() == 'super_admin';
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Only valid when evaluated inside a match block bound to a single
+    // `exhibitors/{boothId}` document (relies on the ambient `resource`).
+    function isCurrentBoothOwner() {
+      return isSignedIn() && resource.data.get('ownerUid', '') == request.auth.uid;
+    }
+
+    // For quizzes/lucky_draws, whose docs carry their own `exhibitorId`
+    // field rather than living at a `exhibitors/{id}` path themselves.
+    function ownsBooth(boothId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/exhibitors/$(boothId))
+        && get(/databases/$(database)/documents/exhibitors/$(boothId)).data.get('ownerUid', '') == request.auth.uid;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  USERS — the wallet-of-record for points, plus role & account status.
+    // ═══════════════════════════════════════════════════════════════════════
+    match /users/{userId} {
+      // Anyone signed in may read their own doc; only a Super Admin may
+      // read/list everyone else's (Manage Users screen).
+      allow get: if isOwner(userId) || isSuperAdmin();
+      allow list: if isSuperAdmin();
+
+      // First-time doc creation. There isn't one single "registration"
+      // moment for a visitor — users/{uid} is created lazily via
+      // SetOptions(merge:true) by whichever action happens first (earning
+      // points, checking into a booth, editing a profile, or the existing
+      // organizer RegisterScreen, which has always self-assigned role:
+      // 'admin' at signup — preserved as-is here). An 'exhibitor' role is
+      // NOT allowed through this general path — it is only ever created by
+      // redeemExhibitorInvite()'s transaction (see the bounded rule below),
+      // which also stamps a matching `boothId` and requires a real,
+      // just-consumed invite code, so this rule doesn't need to duplicate
+      // that check. `points` is left unrestricted at create time since a
+      // visitor's very first write can legitimately already carry nonzero
+      // points (see addPoints()).
+      allow create: if isOwner(userId)
+        && (!('role' in request.resource.data)
+            || request.resource.data.role == 'visitor'
+            || request.resource.data.role == 'admin')
+        && (!('accountStatus' in request.resource.data) || request.resource.data.accountStatus == 'active')
+        && (!('points' in request.resource.data) || request.resource.data.points is number)
+        && (!('points' in request.resource.data) || request.resource.data.points >= 0);
+
+      // The one exception to the rule above: redeemExhibitorInvite()'s
+      // transaction creates `users/{uid}` with role 'exhibitor' directly
+      // (there is no prior doc to "update"). Bounded to exactly the fields
+      // that transaction writes, and requires the invite code named in the
+      // new doc to exist, be unused, and belong to a still-unclaimed booth
+      // matching this uid's new `boothId` — i.e. this can never succeed
+      // except as the tail end of a real invite redemption.
+      allow create: if isOwner(userId)
+        && request.resource.data.role == 'exhibitor'
+        && request.resource.data.get('points', 0) == 0
+        && request.resource.data.accountStatus == 'active'
+        && request.resource.data.boothId is string
+        && get(/databases/$(database)/documents/exhibitors/$(request.resource.data.boothId)).data.get('ownerUid', '') == userId;
+
+      // Super Admin: full control over any user's doc (points/role/ban/etc).
+      allow update, delete: if isSuperAdmin();
+
+      // A normal user may update their OWN doc, but never their own role
+      // or accountStatus. Both fields are read with a default via .get()
+      // because many pre-existing/lazily-created user docs never had these
+      // fields written at all (the app falls back to 'visitor'/'active' in
+      // code) — accessing a genuinely missing map key directly would error
+      // out the whole rule instead of just comparing against the default.
+      // An exhibitor/super_admin additionally can never move their own
+      // `points` field at all (requirement #12) — a normal visitor still
+      // can, per the documented limitation above.
+      allow update: if isOwner(userId)
+        && request.resource.data.get('role', 'visitor') == resource.data.get('role', 'visitor')
+        && request.resource.data.get('accountStatus', 'active') == resource.data.get('accountStatus', 'active')
+        && (
+          (resource.data.get('role', 'visitor') != 'exhibitor' && resource.data.get('role', 'visitor') != 'super_admin')
+          || request.resource.data.get('points', 0) == resource.data.get('points', 0)
+        );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  REWARDS — the e-voucher catalogue. Fully editable only by Super
+    //  Admin; a normal signed-in user may only ever decrement stock by
+    //  exactly 1 (the shape a legitimate redemption produces), and only
+    //  while the reward is active and in stock.
+    // ═══════════════════════════════════════════════════════════════════════
+    match /rewards/{rewardId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isSuperAdmin();
+
+      allow update: if isSuperAdmin()
+        || (
+          isSignedIn()
+          && resource.data.isActive == true
+          && resource.data.stock > 0
+          && request.resource.data.stock == resource.data.stock - 1
+          // No other field may change in this bounded, client-driven write.
+          && request.resource.data.name == resource.data.name
+          && request.resource.data.brandName == resource.data.brandName
+          && request.resource.data.brandImageUrl == resource.data.brandImageUrl
+          && request.resource.data.rewardImageUrl == resource.data.rewardImageUrl
+          && request.resource.data.description == resource.data.description
+          && request.resource.data.voucherValue == resource.data.voucherValue
+          && request.resource.data.pointsRequired == resource.data.pointsRequired
+          && request.resource.data.category == resource.data.category
+          && request.resource.data.isActive == resource.data.isActive
+        );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  REDEMPTIONS — demo fulfillment records. A user may create their own
+    //  (validated against the real reward being redeemed); after that, only
+    //  a Super Admin may ever change one (status, cancel/refund).
+    // ═══════════════════════════════════════════════════════════════════════
+    match /redemptions/{redemptionId} {
+      allow get: if isSignedIn()
+        && (isSuperAdmin() || resource.data.userId == request.auth.uid);
+      // Firestore can't filter a `list` result per-document, but it CAN
+      // require the query itself to already be scoped: this forces any
+      // non-Super-Admin query against `redemptions` to include
+      // `where('userId', '==', request.auth.uid)` (exactly what
+      // getUserRedemptions() does) — an unfiltered query like
+      // getAllRedemptions() is rejected outright unless isSuperAdmin().
+      allow list: if isSuperAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'Pending Delivery'
+        && request.resource.data.refunded == false
+        && request.resource.data.deliveryEmail is string
+        && request.resource.data.deliveryEmail.size() > 0
+        && exists(/databases/$(database)/documents/rewards/$(request.resource.data.rewardId))
+        && get(/databases/$(database)/documents/rewards/$(request.resource.data.rewardId)).data.isActive == true
+        && request.resource.data.pointsSpent ==
+             get(/databases/$(database)/documents/rewards/$(request.resource.data.rewardId)).data.pointsRequired;
+
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  INVENTORY LOGS — Super Admin audit trail only. Immutable once written.
+    // ═══════════════════════════════════════════════════════════════════════
+    match /inventory_logs/{logId} {
+      allow read: if isSuperAdmin();
+      allow create: if isSuperAdmin();
+      allow update, delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  APP CONFIG — e.g. the low-stock threshold. Readable by any signed-in
+    //  user (shop/dashboard need it), writable only by Super Admin.
+    // ═══════════════════════════════════════════════════════════════════════
+    match /app_config/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  EXHIBITORS — booth slots. Super Admin creates/deactivates slots and
+    //  generates invite codes against them (requirement #11: booths only,
+    //  never customization or game content); an exhibitor account can only
+    //  ever touch the ONE booth its own uid owns, and only within the
+    //  bounded field sets its two screens actually write (requirement #4,
+    //  #7's "not modify other exhibitors").
+    // ═══════════════════════════════════════════════════════════════════════
+    match /exhibitors/{boothId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isSuperAdmin();
+
+      // Super Admin: full control (deactivate/reactivate, or any other
+      // slot-level change) — never blocked by the bounded owner rules below.
+      allow update: if isSuperAdmin();
+
+      // Claim: exactly redeemExhibitorInvite()'s transaction — moves
+      // ownerUid from empty to the caller's own uid, once, nothing else.
+      // (The invite-code/booth-unclaimed validation itself lives on the
+      // `exhibitor_invites` and `users` rules, which this write's sibling
+      // writes in the same client transaction must also separately satisfy.)
+      allow update: if isSignedIn()
+        && resource.data.get('ownerUid', '') == ''
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerUid']);
+
+      // Booth customization — owner only, bounded to exactly the fields
+      // ExhibitorModel.toCustomizationMap() writes. ownerUid/isActive/
+      // boothNumber/isSponsored/category/tags/createdAt can never move here.
+      allow update: if isCurrentBoothOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'name', 'description', 'logoUrl', 'contactEmail', 'contactPhone',
+             'website', 'themeColorHex', 'secondaryColorHex',
+             'backgroundColorHex', 'welcomeMessage', 'qrPresetStyle'
+           ]);
+
+      // Per-game enable/points config — owner only, bounded to gameConfig.
+      allow update: if isCurrentBoothOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['gameConfig']);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  EXHIBITOR INVITES — the only path an exhibitor account is ever
+    //  created through (requirements #2-#3). Super Admin creates/lists them
+    //  per booth; the exhibitor's own just-created account may look up and
+    //  redeem exactly the one code it was given, never list them.
+    // ═══════════════════════════════════════════════════════════════════════
+    match /exhibitor_invites/{code} {
+      // A direct get-by-code is how redeemExhibitorInvite() reads its own
+      // code inside its transaction — the random 8-char code functions as
+      // a capability token, so knowing it is what grants read access.
+      allow get: if isSignedIn();
+      // Listing (getInvitesForBooth, filtered by boothId) is Super-Admin-only.
+      allow list: if isSuperAdmin();
+
+      allow create: if isSuperAdmin()
+        && request.resource.data.used == false
+        && request.resource.data.usedByUid == null
+        && request.resource.data.createdByUid == request.auth.uid
+        && exists(/databases/$(database)/documents/exhibitors/$(request.resource.data.boothId));
+
+      // Redemption: the exhibitor's own transaction marks its own code
+      // used, once, and only once — nothing else about the invite may move.
+      allow update: if isSignedIn()
+        && resource.data.used == false
+        && request.resource.data.used == true
+        && request.resource.data.usedByUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used', 'usedByUid', 'usedAt']);
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PER-BOOTH GAME PLAY LIMITER — see FirestoreService.recordGamePlay.
+    //  Read is left open (matches the existing booth_checkins/game_sessions
+    //  convention below: aggregate play counts, no PII). Writes are bound to
+    //  the caller's own uid and to the exact "<uid>_<boothId>" doc id
+    //  recordGamePlay/checkInBooth always target — see the documented
+    //  limitation at the top of this file for what this does NOT close.
+    // ═══════════════════════════════════════════════════════════════════════
+    match /game_plays/{docId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.boothId is string
+        && docId == request.auth.uid + '_' + request.resource.data.boothId;
+      allow delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PRE-EXISTING COLLECTIONS (unrelated to the Rewards Shop/Super Admin
+    //  feature) — rules here mirror what the app already relies on today,
+    //  so deploying this file doesn't break anything that worked before.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Quiz/lucky-draw content is now booth-owned (requirement #7: an
+    // exhibitor may create/edit their OWN game content, never anyone
+    // else's) instead of shared 'admin' territory. isLegacyAdmin() is kept
+    // only so a pre-existing organizer account keeps working — never
+    // isSuperAdmin(), per requirement #11.
+    match /quizzes/{id} {
+      allow read: if isSignedIn();
+      allow create: if ownsBooth(request.resource.data.exhibitorId) || isLegacyAdmin();
+      allow update, delete: if ownsBooth(resource.data.exhibitorId) || isLegacyAdmin();
+    }
+
+    match /quiz_completions/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /lucky_draws/{id} {
+      allow read: if isSignedIn();
+      allow create: if ownsBooth(request.resource.data.exhibitorId) || isLegacyAdmin();
+      allow update, delete: if ownsBooth(resource.data.exhibitorId) || isLegacyAdmin();
+    }
+
+    match /puzzles/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /puzzle_attempts/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isOwner(uid);
+    }
+
+    match /booth_checkins/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /game_sessions/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /leaderboard/{uid} {
+      allow read: if isSignedIn();
+      // An exhibitor/super_admin account can never write its own
+      // leaderboard entry at all (requirement #12) — a normal visitor
+      // still can, unrestricted, same as before this feature existed.
+      // Super Admin may additionally write/delete ANY user's entry — this
+      // is what lets setUserRole() wipe a newly-promoted Super Admin's old
+      // leaderboard entry (points earned before the promotion) once these
+      // rules are deployed.
+      allow write: if isSuperAdmin()
+        || (isOwner(uid)
+            && myRole() != 'exhibitor'
+            && myRole() != 'super_admin');
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

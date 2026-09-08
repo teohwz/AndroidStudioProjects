@@ -1,0 +1,49 @@
+name: fun_kits
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Firebase
+  firebase_core: ^4.7.0
+  firebase_auth: ^6.4.0
+  cloud_firestore: ^6.3.0
+  firebase_storage: ^13.3.0
+
+  # State Management
+  provider: ^6.1.1
+
+  # UI & Animations
+  animate_do: ^5.1.0
+  flutter_spinkit: ^5.2.0
+  confetti: ^0.8.0
+  lottie: ^3.0.0
+ 
+  # Google Sign-In
+  google_sign_in: ^7.2.0
+
+  # Utils
+  cached_network_image: ^3.4.1
+  image_picker: ^1.0.7
+  uuid: ^4.3.3
+  intl: ^0.20.2
+  shared_preferences: ^2.2.2
+  cupertino_icons: ^1.0.8
+  flutter_colorpicker: ^1.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/animations/

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Primary green palette -->
+    <color name="green_dark">#1B5E20</color>
+    <color name="green_medium">#2E7D32</color>
+    <color name="green_light">#4CAF50</color>
+    <color name="green_pale">#E8F5E9</color>
+    <color name="green_accent">#A5D6A7</color>
+
+    <!-- UI neutrals -->
+    <color name="background">#F0F7F0</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="text_primary">#1A1A1A</color>
+    <color name="text_secondary">#666666</color>
+    <color name="text_hint">#BDBDBD</color>
+    <color name="divider">#F0F0F0</color>
+
+    <!-- Semantic -->
+    <color name="price_green">#2E7D32</color>
+    <color name="expiry_red">#E53935</color>
+    <color name="warning_orange">#E65100</color>
+    <color name="timer_red">#FF5722</color>
+</resources>

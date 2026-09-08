@@ -1,0 +1,102 @@
+[
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/mipmap-xxhdpi_ic_launcher.webp.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/mipmap-xxhdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/layout_activity_password_entry.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/layout/activity_password_entry.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/mipmap-xxxhdpi_ic_launcher.webp.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/mipmap-xxxhdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/xml_data_extraction_rules.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/xml/data_extraction_rules.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/mipmap-hdpi_ic_launcher.webp.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/mipmap-hdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/layout_item_password.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/layout/item_password.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/xml_backup_rules.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/xml/backup_rules.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/layout_activity_app_database.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/layout/activity_app_database.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/mipmap-mdpi_ic_launcher_round.webp.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/mipmap-mdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/mipmap-xhdpi_ic_launcher_round.webp.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/mipmap-xhdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/mipmap-hdpi_ic_launcher_round.webp.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/mipmap-hdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/drawable_ic_launcher_background.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/mipmap-xxhdpi_ic_launcher_round.webp.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/mipmap-xxhdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/mipmap-mdpi_ic_launcher.webp.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/mipmap-mdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/layout_activity_login.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/layout/activity_login.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/mipmap-xxxhdpi_ic_launcher_round.webp.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/mipmap-xxxhdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/layout_activity_main.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/layout/activity_main.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/layout_activity_password_adapter.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/layout/activity_password_adapter.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/layout_activity_add_edit_password.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/layout/activity_add_edit_password.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/mipmap-xhdpi_ic_launcher.webp.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/mipmap-xhdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/layout_activity_password_dao.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/layout/activity_password_dao.xml"
+    },
+    {
+        "merged": "my.edu.utar.passwordmanager.app-debug-39:/layout_activity_encryption_utils.xml.flat",
+        "source": "my.edu.utar.passwordmanager.app-main-41:/layout/activity_encryption_utils.xml"
+    }
+]

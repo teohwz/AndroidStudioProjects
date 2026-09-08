@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#F5F5F5">
+
+    <!-- Toolbar -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        android:elevation="4dp"
+        app:title="FoodResQ"
+        app:titleTextColor="@android:color/white" />
+
+    <!-- Timer Banner -->
+    <LinearLayout
+        android:id="@+id/timerBanner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="#FF5722"
+        android:padding="12dp"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="⏱️ Your reservation expires in:"
+            android:textColor="@android:color/white"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/timerText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="05:00"
+            android:textColor="@android:color/white"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"
+            android:layout_marginEnd="8dp" />
+
+        <!-- NEW: Show QR button -->
+        <Button
+            android:id="@+id/btnShowQR"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:text="Show QR"
+            android:textSize="11sp"
+            android:textColor="#FF5722"
+            android:backgroundTint="#FFFFFF"
+            android:paddingHorizontal="10dp" />
+
+    </LinearLayout>
+
+
+    <!-- ── BROWSE PANEL ─────────────────────────────────────────── -->
+    <LinearLayout
+        android:id="@+id/layoutList"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:visibility="visible">
+
+        <EditText
+            android:id="@+id/searchBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="12dp"
+            android:hint="Search food name or category…"
+            android:inputType="text"
+            android:padding="10dp"
+            android:background="@android:color/white"
+            android:drawableStart="@android:drawable/ic_menu_search"
+            android:drawablePadding="8dp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:paddingHorizontal="8dp">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chipGroup"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleSelection="true"
+                android:padding="4dp" />
+        </HorizontalScrollView>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="8dp" />
+    </LinearLayout>
+
+    <!-- ── DASHBOARD PANEL ──────────────────────────────────────── -->
+    <ScrollView
+        android:id="@+id/layoutDashboard"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:visibility="gone"
+        android:background="#F5F5F5">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="My Impact Dashboard"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="#212121"
+                android:layout_marginBottom="16dp" />
+
+            <!-- Meals Rescued -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="20dp"
+                    android:gravity="center_vertical"
+                    android:background="#E8F5E9">
+                    <TextView android:layout_width="56dp" android:layout_height="56dp"
+                        android:text="🍱" android:textSize="32sp" android:gravity="center" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical"
+                        android:layout_marginStart="16dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Meals Rescued" android:textSize="14sp" android:textColor="#757575" />
+                        <TextView android:id="@+id/tvTotalMeals" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:text="0"
+                            android:textSize="36sp" android:textStyle="bold" android:textColor="#2E7D32" />
+                    </LinearLayout>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Total Savings -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="20dp"
+                    android:gravity="center_vertical"
+                    android:background="#E3F2FD">
+                    <TextView android:layout_width="56dp" android:layout_height="56dp"
+                        android:text="💰" android:textSize="32sp" android:gravity="center" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical"
+                        android:layout_marginStart="16dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Total Savings" android:textSize="14sp" android:textColor="#757575" />
+                        <TextView android:id="@+id/tvTotalSavings" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:text="RM 0.00"
+                            android:textSize="32sp" android:textStyle="bold" android:textColor="#1565C0" />
+                        <TextView android:id="@+id/tvSavingsNote" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:text="vs. estimated full price"
+                            android:textSize="11sp" android:textColor="#9E9E9E" />
+                    </LinearLayout>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- CO2 -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="20dp"
+                    android:gravity="center_vertical"
+                    android:background="#FFF3E0">
+                    <TextView android:layout_width="56dp" android:layout_height="56dp"
+                        android:text="🌱" android:textSize="32sp" android:gravity="center" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical"
+                        android:layout_marginStart="16dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="CO₂ Prevented" android:textSize="14sp" android:textColor="#757575" />
+                        <TextView android:id="@+id/tvCO2" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:text="0.00 kg"
+                            android:textSize="32sp" android:textStyle="bold" android:textColor="#E65100" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="~2.5 kg CO₂ per meal saved"
+                            android:textSize="11sp" android:textColor="#9E9E9E" />
+                    </LinearLayout>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Total Orders -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="20dp"
+                    android:gravity="center_vertical"
+                    android:background="#FCE4EC">
+                    <TextView android:layout_width="56dp" android:layout_height="56dp"
+                        android:text="🧾" android:textSize="32sp" android:gravity="center" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical"
+                        android:layout_marginStart="16dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Total Orders" android:textSize="14sp" android:textColor="#757575" />
+                        <TextView android:id="@+id/tvTotalOrders" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:text="0"
+                            android:textSize="36sp" android:textStyle="bold" android:textColor="#880E4F" />
+                    </LinearLayout>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Recent Orders"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#212121"
+                android:layout_marginBottom="8dp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvRecentOrders"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false" />
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- ── MAP PANEL ────────────────────────────────────────────── -->
+    <FrameLayout
+        android:id="@+id/layoutMap"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:visibility="gone">
+
+        <!-- SupportMapFragment is added programmatically into this container -->
+        <fragment
+            android:id="@+id/mapFragment"
+            android:name="com.google.android.gms.maps.SupportMapFragment"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <!-- Bottom info card — shown when a marker is tapped -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cardMapInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_margin="12dp"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="8dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@android:color/white">
+
+                <TextView
+                    android:id="@+id/tvMapFoodName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#212121" />
+
+                <TextView
+                    android:id="@+id/tvMapFoodDetails"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="13sp"
+                    android:textColor="#757575"
+                    android:layout_marginTop="4dp" />
+
+                <Button
+                    android:id="@+id/btnMapOrder"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Order Now"
+                    android:backgroundTint="#4CAF50"
+                    android:textColor="@android:color/white" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+    </FrameLayout>
+
+    <!-- ── BOTTOM TAB BAR ────────────────────────────────────────── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:background="@android:color/white"
+        android:elevation="8dp">
+
+        <Button
+            android:id="@+id/tabBrowse"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="🍜 Browse"
+            android:textColor="#4CAF50"
+            android:textSize="12sp" />
+
+        <View android:layout_width="1dp" android:layout_height="match_parent"
+            android:background="#E0E0E0" />
+
+        <Button
+            android:id="@+id/tabDashboard"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="📊 Dashboard"
+            android:textColor="#9E9E9E"
+            android:textSize="12sp" />
+
+        <View android:layout_width="1dp" android:layout_height="match_parent"
+            android:background="#E0E0E0" />
+
+        <Button
+            android:id="@+id/tabMap"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="🗺️ Map"
+            android:textColor="#9E9E9E"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+
+</LinearLayout>
