@@ -278,6 +278,8 @@ class AuthService extends ChangeNotifier {
             return 'That booth already has an owner.';
           case 'booth_missing':
             return 'That code\'s booth no longer exists — contact your organizer.';
+          case 'expired':
+            return 'That invite code has expired — ask your organizer for a new one.';
           default:
             return 'Invalid invite code.';
         }

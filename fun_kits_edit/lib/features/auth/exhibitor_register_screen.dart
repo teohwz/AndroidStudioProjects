@@ -49,8 +49,14 @@ class _ExhibitorRegisterScreenState extends State<ExhibitorRegisterScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error)));
     } else if (mounted) {
+      // A freshly-redeemed invite always makes this an exhibitor account —
+      // send them to their own Dashboard, not the visitor Home screen (a
+      // real bug: the account itself was always correctly created with
+      // role: 'exhibitor', but this screen used to land everyone on Home
+      // regardless, which made a brand-new exhibitor look/feel like they'd
+      // registered as a visitor).
       Navigator.pushNamedAndRemoveUntil(
-          context, AppRoutes.home, (route) => false);
+          context, AppRoutes.exhibitorDashboard, (route) => false);
     }
   }
 

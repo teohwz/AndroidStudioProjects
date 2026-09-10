@@ -78,14 +78,17 @@ class _VisitorRegisterScreenState extends State<VisitorRegisterScreen> {
   }
 
   /// Guest-fallback — this screen gates first entry from RoleChoiceScreen,
-  /// so a way to proceed without registering is essential.
-  Future<void> _skip() async {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      Navigator.of(context)
-          .pushNamedAndRemoveUntil(AppRoutes.home, (route) => false);
-    }
+  /// so a way to proceed without registering is essential. Deliberately
+  /// NOT a pop-or-push branch: this screen is always reached pushed on top
+  /// of at least RoleChoiceScreen (sometimes LoginScreen too, if that's
+  /// what the app happened to boot into), so `canPop()` is unconditionally
+  /// true here — a `pop()` would just reveal whichever of those screens
+  /// sent the visitor here, leaving them one more screen away from
+  /// actually being in the app instead of landing them in it. Always
+  /// clearing the stack down to Home is what "continue as guest" means.
+  void _skip() {
+    Navigator.of(context)
+        .pushNamedAndRemoveUntil(AppRoutes.home, (route) => false);
   }
 
   @override

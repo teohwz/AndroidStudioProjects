@@ -139,6 +139,11 @@ class FirestoreService {
         'usedAt': null,
         'createdByUid': createdByUid,
         'createdAt': FieldValue.serverTimestamp(),
+        // A booth can only have one active (unused, unexpired) code at a
+        // time — see manage_booths_screen.dart's _InviteSheet, which hides
+        // the Generate button while one exists.
+        'expiresAt':
+            Timestamp.fromDate(DateTime.now().add(const Duration(days: 7))),
       });
       return code;
     }
@@ -189,6 +194,12 @@ class FirestoreService {
       final invite = inviteSnap.data()!;
       if (invite['used'] == true) {
         return const RedemptionOutcome.failure('already_used');
+      }
+      // A missing expiresAt (codes generated before this field existed)
+      // means "never expires", not "already expired".
+      final expiresAt = invite['expiresAt'] as Timestamp?;
+      if (expiresAt != null && expiresAt.toDate().isBefore(DateTime.now())) {
+        return const RedemptionOutcome.failure('expired');
       }
       final boothId = invite['boothId'] as String? ?? '';
       final boothRef = _db.collection('exhibitors').doc(boothId);

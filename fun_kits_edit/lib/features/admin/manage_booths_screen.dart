@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -217,6 +218,40 @@ class _BoothTile extends StatelessWidget {
   }
 }
 
+/// A booth's invite code moves through three states: [active] (unused,
+/// not yet expired — the one that blocks a new "Generate"), [used]
+/// (redeemed by an exhibitor), or [expired] (7 days passed, unused).
+enum _InviteState { active, used, expired }
+
+_InviteState _inviteState(Map<String, dynamic> invite) {
+  if (invite['used'] == true) return _InviteState.used;
+  final expiresAt = invite['expiresAt'] as Timestamp?;
+  if (expiresAt != null && expiresAt.toDate().isBefore(DateTime.now())) {
+    return _InviteState.expired;
+  }
+  return _InviteState.active;
+}
+
+/// Relative time-remaining text for an Active invite only ("Expires in 6d
+/// 23h" / "Expires in 3h 12m" / "Expires in 4m") — null for Used/Expired
+/// codes, and for a legacy code with no `expiresAt` at all (it never
+/// expires, so there's nothing to count down to). Computed fresh whenever
+/// the invite list rebuilds — not a live per-second ticking timer.
+String? _expiryCountdownText(Map<String, dynamic> invite) {
+  if (_inviteState(invite) != _InviteState.active) return null;
+  final expiresAt = invite['expiresAt'] as Timestamp?;
+  if (expiresAt == null) return null;
+  final remaining = expiresAt.toDate().difference(DateTime.now());
+  if (remaining.isNegative) return null;
+  if (remaining.inDays >= 1) {
+    return 'Expires in ${remaining.inDays}d ${remaining.inHours % 24}h';
+  }
+  if (remaining.inHours >= 1) {
+    return 'Expires in ${remaining.inHours}h ${remaining.inMinutes % 60}m';
+  }
+  return 'Expires in ${remaining.inMinutes.clamp(1, 59)}m';
+}
+
 class _InviteSheet extends StatelessWidget {
   const _InviteSheet({required this.fs, required this.booth});
   final FirestoreService fs;
@@ -250,7 +285,7 @@ class _InviteSheet extends StatelessWidget {
               const SizedBox(height: 10),
               const Text(
                 'Give this code to the exhibitor. It can only be used once, '
-                'for this booth.',
+                'for this booth, and expires in 7 days if unused.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: AppColors.textMedium),
               ),
@@ -277,85 +312,122 @@ class _InviteSheet extends StatelessWidget {
           minChildSize: 0.4,
           maxChildSize: 0.9,
           expand: false,
-          builder: (context, scrollCtrl) => Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(4)),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text('Invite Codes — ${booth.name}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w800, fontSize: 16)),
-                    ),
-                    if (!booth.isClaimed)
-                      TextButton.icon(
-                        onPressed: () => _generate(context),
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Generate'),
-                      ),
-                  ],
-                ),
-              ),
-              if (booth.isClaimed)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    'This booth has already been claimed by an exhibitor — '
-                    'no new codes are needed.',
-                    style:
-                        TextStyle(fontSize: 12, color: AppColors.textMedium),
+          builder: (context, scrollCtrl) => StreamBuilder<List<Map<String, dynamic>>>(
+            stream: fs.getInvitesForBooth(booth.id),
+            builder: (context, snap) {
+              final invites = snap.data ?? [];
+              // Only one active (unused, unexpired) code is allowed per
+              // booth at a time — Generate stays hidden until it's used
+              // or expires.
+              final hasActiveCode = invites
+                  .any((inv) => _inviteState(inv) == _InviteState.active);
+              return Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(4)),
                   ),
-                ),
-              Expanded(
-                child: StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: fs.getInvitesForBooth(booth.id),
-                  builder: (context, snap) {
-                    final invites = snap.data ?? [];
-                    if (invites.isEmpty) {
-                      return const Center(
-                          child: Text('No invite codes generated yet.',
-                              style:
-                                  TextStyle(color: AppColors.textMedium)));
-                    }
-                    return ListView.separated(
-                      controller: scrollCtrl,
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                      itemCount: invites.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (_, i) {
-                        final inv = invites[i];
-                        final used = inv['used'] == true;
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(inv['code'] as String,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text('Invite Codes — ${booth.name}',
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1)),
-                          trailing: Text(
-                            used ? 'Used' : 'Unused',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                                color: used
-                                    ? AppColors.textMedium
-                                    : AppColors.success),
+                                  fontWeight: FontWeight.w800, fontSize: 16)),
+                        ),
+                        if (!booth.isClaimed && !hasActiveCode)
+                          TextButton.icon(
+                            onPressed: () => _generate(context),
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Generate'),
                           ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
+                      ],
+                    ),
+                  ),
+                  if (booth.isClaimed)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: Text(
+                        'This booth has already been claimed by an exhibitor — '
+                        'no new codes are needed.',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textMedium),
+                      ),
+                    )
+                  else if (hasActiveCode)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: Text(
+                        'There is already an active code for this booth — '
+                        'it must be used or expire before a new one can be '
+                        'generated.',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textMedium),
+                      ),
+                    ),
+                  Expanded(
+                    child: invites.isEmpty
+                        ? const Center(
+                            child: Text('No invite codes generated yet.',
+                                style:
+                                    TextStyle(color: AppColors.textMedium)))
+                        : ListView.separated(
+                            controller: scrollCtrl,
+                            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                            itemCount: invites.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (_, i) {
+                              final inv = invites[i];
+                              final state = _inviteState(inv);
+                              final String label;
+                              final Color color;
+                              switch (state) {
+                                case _InviteState.active:
+                                  label = 'Active';
+                                  color = AppColors.success;
+                                  break;
+                                case _InviteState.used:
+                                  label = 'Used';
+                                  color = AppColors.textMedium;
+                                  break;
+                                case _InviteState.expired:
+                                  label = 'Expired';
+                                  color = AppColors.danger;
+                                  break;
+                              }
+                              final countdown = _expiryCountdownText(inv);
+                              return ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(inv['code'] as String,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 1)),
+                                subtitle: countdown == null
+                                    ? null
+                                    : Text(countdown,
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.textMedium)),
+                                trailing: Text(
+                                  label,
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      color: color),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
