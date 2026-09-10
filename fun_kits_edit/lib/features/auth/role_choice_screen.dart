@@ -35,6 +35,15 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen> {
 
   Future<void> _continueAsVisitor() async {
     final auth = context.read<AuthService>();
+    // Captured BEFORE ensureVisitorSession()/logout() below can change it —
+    // this is the true "does any account (anonymous or real) already
+    // exist" signal for whether "Skip — Continue as Guest" should show on
+    // the next screen. Deliberately not based on Navigator.canPop(): that
+    // reflects navigation-stack shape, not account state, and could stay
+    // true even after this same visitor already has an anonymous account
+    // (e.g. if they'd been sent back to this screen after establishing
+    // one), which showed Skip again when it shouldn't have.
+    final hadNoAccountYet = auth.currentUser == null;
     // An exhibitor (or Super Admin) reaching this card is switching AWAY
     // from a signed-in staff account, not just establishing a first
     // session — confirm before logging them out, since ensureVisitorSession
@@ -82,12 +91,11 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen> {
     // "Save My Points" prompt (that one's reserved for someone who
     // already has points at stake and wants to rank/redeem) — see
     // VisitorRegisterScreen's doc comment. Its "Skip — Continue as Guest"
-    // button only makes sense on a true first launch (this RoleChoiceScreen
-    // is itself the bootstrap root, i.e. !canPop()) — reached via "Switch
-    // Role" instead, the visitor already has somewhere to go back to.
+    // button only makes sense the first time someone ever uses the app —
+    // once an anonymous or real account already exists, hadNoAccountYet is
+    // false and Skip stays hidden.
     Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => VisitorRegisterScreen(
-            showSkip: !Navigator.of(context).canPop())));
+        builder: (_) => VisitorRegisterScreen(showSkip: hadNoAccountYet)));
   }
 
   void _continueAsExhibitor() {

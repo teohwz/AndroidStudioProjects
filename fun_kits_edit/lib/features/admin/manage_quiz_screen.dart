@@ -210,7 +210,6 @@ class _QuizFormSheetState extends State<_QuizFormSheet> {
               correctIndex: q.correctIndex,
               correctIndices: q.correctIndices.toList(),
               points: q.bonusPoints,
-              penalty: q.penaltyPoints,
               questionType: q.questionType,
             ))
         .toList();
@@ -319,8 +318,6 @@ class _QuizFormSheetState extends State<_QuizFormSheet> {
                         setState(() => _questions[i].correctIndex = idx),
                     onBonusChanged: (v) =>
                         setState(() => _questions[i].bonusPoints = v),
-                    onPenaltyChanged: (v) =>
-                        setState(() => _questions[i].penaltyPoints = v),
                     onTypeChanged: (type) =>
                         setState(() => _questions[i].questionType = type),
                     onCheckboxToggle: (idx) {
@@ -391,7 +388,6 @@ class _QuestionEntry {
   int correctIndex = 0;
   Set<int> correctIndices = {};
   int bonusPoints = 10;
-  int penaltyPoints = 0;
   String questionType = 'multiple_choice'; // 'multiple_choice', 'checkbox', 'dropdown'
 
   _QuestionEntry();
@@ -405,7 +401,6 @@ class _QuestionEntry {
     e.correctIndex = q.correctIndex;
     e.correctIndices = Set<int>.from(q.correctIndices);
     e.bonusPoints = q.points;
-    e.penaltyPoints = q.penalty;
     e.questionType = q.questionType;
     return e;
   }
@@ -418,7 +413,6 @@ class _QuestionCard extends StatelessWidget {
     required this.onRemove,
     required this.onCorrectChanged,
     required this.onBonusChanged,
-    required this.onPenaltyChanged,
     required this.onTypeChanged,
     required this.onCheckboxToggle,
   });
@@ -428,7 +422,6 @@ class _QuestionCard extends StatelessWidget {
   final VoidCallback onRemove;
   final Function(int) onCorrectChanged;
   final Function(int) onBonusChanged;
-  final Function(int) onPenaltyChanged;
   final Function(String) onTypeChanged;
   final Function(int) onCheckboxToggle;
 
@@ -540,54 +533,24 @@ class _QuestionCard extends StatelessWidget {
                 style:
                     const TextStyle(color: AppColors.textMedium, fontSize: 11)),
             const SizedBox(height: 10),
-            // Points / Penalty row
-            Row(
+            // Bonus points
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('✅ Bonus pts',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.success)),
-                      const SizedBox(height: 4),
-                      DropdownButton<int>(
-                        value: entry.bonusPoints,
-                        isDense: true,
-                        items: [5, 10, 15, 20, 25, 50]
-                            .map((v) => DropdownMenuItem(
-                                value: v, child: Text('+$v')))
-                            .toList(),
-                        onChanged: (v) => onBonusChanged(v!),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('❌ Penalty pts',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.danger)),
-                      const SizedBox(height: 4),
-                      DropdownButton<int>(
-                        value: entry.penaltyPoints,
-                        isDense: true,
-                        items: [0, 5, 10, 15, 20]
-                            .map((v) => DropdownMenuItem(
-                                value: v,
-                                child:
-                                    Text(v == 0 ? 'None' : '-$v')))
-                            .toList(),
-                        onChanged: (v) => onPenaltyChanged(v!),
-                      ),
-                    ],
-                  ),
+                const Text('✅ Bonus pts',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.success)),
+                const SizedBox(height: 4),
+                DropdownButton<int>(
+                  value: entry.bonusPoints,
+                  isDense: true,
+                  items: [5, 10, 15, 20, 25, 50]
+                      .map((v) => DropdownMenuItem(
+                          value: v, child: Text('+$v')))
+                      .toList(),
+                  onChanged: (v) => onBonusChanged(v!),
                 ),
               ],
             ),

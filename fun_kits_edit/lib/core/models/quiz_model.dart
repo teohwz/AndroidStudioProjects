@@ -6,7 +6,6 @@ class QuizQuestion {
   final int correctIndex; // for multiple choice and dropdown
   final List<int> correctIndices; // for checkbox (multi-select)
   final int points;
-  final int penalty;
   final String? explanation;
   final String? imageUrl;
   final String questionType; // 'multiple_choice', 'checkbox', 'dropdown'
@@ -18,7 +17,6 @@ class QuizQuestion {
     this.correctIndex = 0,
     this.correctIndices = const [],
     this.points = 10,
-    this.penalty = 0,
     this.explanation,
     this.imageUrl,
     this.questionType = 'multiple_choice',
@@ -46,7 +44,6 @@ class QuizQuestion {
         correctIndex: map['correctIndex'] ?? 0,
         correctIndices: List<int>.from(map['correctIndices'] ?? []),
         points: map['points'] ?? 10,
-        penalty: map['penalty'] ?? 0,
         explanation: map['explanation'],
         imageUrl: map['imageUrl'],
         questionType: map['questionType'] ?? 'multiple_choice',
@@ -59,7 +56,6 @@ class QuizQuestion {
         'correctIndex': correctIndex,
         'correctIndices': correctIndices,
         'points': points,
-        'penalty': penalty,
         'explanation': explanation,
         'imageUrl': imageUrl,
         'questionType': questionType,

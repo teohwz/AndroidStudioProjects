@@ -13,11 +13,15 @@ import 'visitor_register_screen.dart';
 /// instead of purple) so the two are visually distinguishable at a glance.
 /// Reached two ways:
 /// - As the app's bootstrap screen after a registered (email-linked)
-///   visitor logs out (see app.dart / AuthService.lastKnownMode) — the
-///   sole route in the stack, so a "Skip" fallback is essential here.
-/// - Pushed on top of [VisitorRegisterScreen] or [SaveProgressScreen] via
-///   their "Sign in" links, for a visitor who already has a saved-points
-///   account.
+///   visitor logs out (see app.dart / AuthService.lastKnownMode), or after
+///   Home's own Logout button clears the stack down to this route — the
+///   sole route either way, so "Change Role?"/"Skip" are shown here (see
+///   `build()`'s `canPop` check) since there's no other way out.
+/// - Pushed on top of [VisitorRegisterScreen] via its "Sign in" link, for a
+///   visitor who already has an anonymous session and just wants to log
+///   into an existing saved-points account — "Change Role?"/"Skip" are
+///   hidden here, since a Back button already leads out and the account
+///   already exists.
 class VisitorLoginScreen extends StatefulWidget {
   const VisitorLoginScreen({super.key});
 
@@ -94,6 +98,14 @@ class _VisitorLoginScreenState extends State<VisitorLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // True only when this screen is the sole route in the stack (the app's
+    // bootstrap screen after a registered visitor logs out, or right after
+    // Home's Logout clears the stack down to it) — the only case where
+    // "Change Role?"/"Skip" are needed, since there's no other way out.
+    // When pushed from VisitorRegisterScreen's "Sign in" link, this is
+    // false and both stay hidden — the visitor already has an account and
+    // a Back button.
+    final canPop = Navigator.of(context).canPop();
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
@@ -209,28 +221,30 @@ class _VisitorLoginScreenState extends State<VisitorLoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Center(
-                  child: TextButton(
-                    onPressed: _changeRole,
-                    child: const Text(
-                      'Change Role?',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textMedium),
+                if (!canPop)
+                  Center(
+                    child: TextButton(
+                      onPressed: _changeRole,
+                      child: const Text(
+                        'Change Role?',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMedium),
+                      ),
                     ),
                   ),
-                ),
-                Center(
-                  child: TextButton(
-                    onPressed: _skipToGuest,
-                    child: const Text(
-                      'Skip — Continue as Guest',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textMedium),
+                if (!canPop)
+                  Center(
+                    child: TextButton(
+                      onPressed: _skipToGuest,
+                      child: const Text(
+                        'Skip — Continue as Guest',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMedium),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),

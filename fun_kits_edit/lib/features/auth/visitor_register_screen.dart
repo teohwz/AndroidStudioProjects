@@ -19,14 +19,15 @@ import 'visitor_login_screen.dart';
 class VisitorRegisterScreen extends StatefulWidget {
   const VisitorRegisterScreen({super.key, this.showSkip = false});
 
-  /// True only on the true first-ever app launch (RoleChoiceScreen reached
-  /// as the app's bootstrap root, not via "Switch Role") — the one case
-  /// where "Skip — Continue as Guest" is shown. Every other path that
-  /// reaches this screen (Home's Register menu item, Save My Points,
-  /// registration-required prompts, the Visitor sign-in screen's Register
-  /// link, and Switch Role → I am a Visitor) leaves this false, so the
-  /// button stays hidden — those visitors already have somewhere to go
-  /// back to.
+  /// True only the first time someone ever uses the app — no anonymous or
+  /// real account existed yet at the moment RoleChoiceScreen's "I am a
+  /// Visitor" card was tapped (see role_choice_screen.dart's
+  /// `hadNoAccountYet`). The one case where "Skip — Continue as Guest" is
+  /// shown. Every other path that reaches this screen — Home's Register
+  /// menu item, Save My Points, registration-required prompts, the Visitor
+  /// sign-in screen's Register link, Switch Role → I am a Visitor, and even
+  /// a return trip to Role Choice by a visitor who already has an
+  /// anonymous account — leaves this false, so the button stays hidden.
   final bool showSkip;
 
   @override

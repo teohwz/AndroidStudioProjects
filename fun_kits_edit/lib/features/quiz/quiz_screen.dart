@@ -99,7 +99,7 @@ class _QuizScreenState extends State<QuizScreen> {
     } else {
       _timer?.cancel();
       final correct = question.isCorrect(index);
-      final delta = correct ? question.points : -question.penalty;
+      final delta = correct ? question.points : 0;
       setState(() {
         _selectedOption = index;
         _answered = true;
@@ -115,7 +115,7 @@ class _QuizScreenState extends State<QuizScreen> {
     _timer?.cancel();
     final question = _selectedQuiz!.questions[_currentIndex];
     final correct = question.isCheckboxCorrect(_selectedCheckboxes.toList());
-    final delta = correct ? question.points : -question.penalty;
+    final delta = correct ? question.points : 0;
     setState(() {
       _answered = true;
       _score = (_score + delta).clamp(0, 99999);
@@ -307,15 +307,12 @@ class _QuizScreenState extends State<QuizScreen> {
               ),
             ],
           ),
-          // Points/penalty info
+          // Points info
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(
               children: [
                 _Chip('+${question.points} correct', AppColors.success),
-                const SizedBox(width: 8),
-                if (question.penalty > 0)
-                  _Chip('-${question.penalty} wrong', AppColors.danger),
               ],
             ),
           ),
