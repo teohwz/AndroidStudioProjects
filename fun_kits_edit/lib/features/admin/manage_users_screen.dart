@@ -172,9 +172,12 @@ class _UserListTile extends StatelessWidget {
                     Text(email != null && email.isNotEmpty ? email : 'No email',
                         style: const TextStyle(
                             color: AppColors.textMedium, fontSize: 11)),
-                    Text('$points pts',
-                        style: const TextStyle(
-                            color: AppColors.textMedium, fontSize: 11)),
+                    // Exhibitor and Super Admin accounts never have points —
+                    // showing "0 pts" here would suggest otherwise.
+                    if (role != 'exhibitor' && role != 'super_admin')
+                      Text('$points pts',
+                          style: const TextStyle(
+                              color: AppColors.textMedium, fontSize: 11)),
                   ],
                 ),
               ),
@@ -352,6 +355,12 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
     final points = (u['points'] as num?)?.toInt() ?? 0;
     final name = (u['displayName'] as String?)?.trim();
     final email = (u['email'] as String?)?.trim();
+    // The profile's actual persisted role (not _role, which can briefly
+    // differ while a role change is still pending confirmation) — used to
+    // decide whether points/Adjust Points apply at all, same as the list
+    // tile above.
+    final role = (u['role'] as String?) ?? 'visitor';
+    final showPoints = role != 'exhibitor' && role != 'super_admin';
 
     return AlertDialog(
       title: Text(
@@ -367,40 +376,45 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
           children: [
             _row('User ID', _uid),
             _row('Email', email != null && email.isNotEmpty ? email : '—'),
-            _row('Points', '$points'),
+            // Exhibitor and Super Admin accounts never have points — the
+            // whole Points row + Adjust Points section is skipped for them,
+            // rather than showing "0" alongside controls that no-op.
+            if (showPoints) _row('Points', '$points'),
             _row('Status', banned ? 'Banned' : 'Active'),
-            const SizedBox(height: 14),
-            const Text('Adjust Points',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _pointsCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                        isDense: true,
-                        hintText: 'Amount',
-                        border: OutlineInputBorder()),
+            if (showPoints) ...[
+              const SizedBox(height: 14),
+              const Text('Adjust Points',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _pointsCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                          isDense: true,
+                          hintText: 'Amount',
+                          border: OutlineInputBorder()),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  onPressed: _busy ? null : () => _adjustPoints(1),
-                  icon: const Icon(Icons.add_rounded),
-                  style: IconButton.styleFrom(
-                      backgroundColor: AppColors.success),
-                ),
-                const SizedBox(width: 4),
-                IconButton.filled(
-                  onPressed: _busy ? null : () => _adjustPoints(-1),
-                  icon: const Icon(Icons.remove_rounded),
-                  style:
-                      IconButton.styleFrom(backgroundColor: AppColors.danger),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    onPressed: _busy ? null : () => _adjustPoints(1),
+                    icon: const Icon(Icons.add_rounded),
+                    style: IconButton.styleFrom(
+                        backgroundColor: AppColors.success),
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton.filled(
+                    onPressed: _busy ? null : () => _adjustPoints(-1),
+                    icon: const Icon(Icons.remove_rounded),
+                    style: IconButton.styleFrom(
+                        backgroundColor: AppColors.danger),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
             const Text('Account Status',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
