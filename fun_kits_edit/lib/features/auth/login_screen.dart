@@ -9,7 +9,16 @@ import 'role_choice_screen.dart';
 
 // ─── LOGIN SCREEN ────────────────────────────────────────────────────────────
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.hideChangeRole = false});
+
+  /// True when this screen was reached via a visitor's "Switch Role"
+  /// action (RoleChoiceScreen with hideRole: 'visitor') — in that case the
+  /// only way "in" here already was a deliberate visitor-to-exhibitor
+  /// switch, so the "Not exhibitors? Change role" way back out is hidden.
+  /// Left false (the default) everywhere else, including this screen's own
+  /// bootstrap-root case, where the link is the only way out for an
+  /// exhibitor who logged out and landed here by mistake.
+  final bool hideChangeRole;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -183,17 +192,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Center(
-                  child: TextButton(
-                    onPressed: _changeRole,
-                    child: const Text(
-                      'Not exhibitors? Change role',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textMedium),
+                if (!widget.hideChangeRole)
+                  Center(
+                    child: TextButton(
+                      onPressed: _changeRole,
+                      child: const Text(
+                        'Not exhibitors? Change role',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMedium),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),

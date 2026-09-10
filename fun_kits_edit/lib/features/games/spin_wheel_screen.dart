@@ -8,6 +8,8 @@ import 'package:confetti/confetti.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../shared/widgets/recent_winners_list.dart';
+import '../../shared/widgets/register_required_dialog.dart';
 import 'game_common.dart';
 
 /// SPIN WHEEL — an exhibitor-configurable prize wheel. Every booth's wheel
@@ -84,6 +86,13 @@ class _SpinWheelScreenState extends State<SpinWheelScreen> {
     if (_spinning || _segments.isEmpty) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+    // Playing now requires a registered account (see the Prize Win
+    // Notifications round) — a winner always needs somewhere real to be
+    // notified. An anonymous visitor is prompted to register instead.
+    if (user.isAnonymous) {
+      showRegisterRequiredDialog(context, action: 'spin the wheel');
+      return;
+    }
     setState(() => _spinning = true);
 
     final result = await _fs.playPrizeGame(
@@ -232,6 +241,8 @@ class _SpinWheelScreenState extends State<SpinWheelScreen> {
                                       fontSize: 16)),
                             ),
                           ),
+                          RecentWinnersList(
+                              boothId: widget.exhibitorId, color: color),
                         ],
                       ),
                     ),

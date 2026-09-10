@@ -5,6 +5,12 @@ import '../../core/constants/app_colors.dart';
 import '../../core/models/redemption_model.dart';
 import '../../core/services/firestore_service.dart';
 
+// Deliberately excludes 'exhibitor': an exhibitor account is only ever
+// created via invite-code redemption (which also assigns a boothId) — this
+// generic dropdown must never be able to set a user's role TO 'exhibitor',
+// since that would leave them with no assigned booth and break every
+// exhibitor-only screen. Viewing an *existing* exhibitor's profile is
+// handled separately by _UserDetailDialogState's read-only Role display.
 const List<String> _kRoles = ['visitor', 'admin', 'super_admin'];
 
 String _roleLabel(String role) {
@@ -13,6 +19,8 @@ String _roleLabel(String role) {
       return 'Super Admin';
     case 'admin':
       return 'Admin';
+    case 'exhibitor':
+      return 'Exhibitor';
     default:
       return 'Visitor';
   }
@@ -179,7 +187,9 @@ class _UserListTile extends StatelessWidget {
                         ? AppColors.accent
                         : role == 'admin'
                             ? AppColors.primary
-                            : AppColors.textMedium,
+                            : role == 'exhibitor'
+                                ? AppColors.exhibitorColor
+                                : AppColors.textMedium,
                   ),
                   const SizedBox(height: 4),
                   if (banned)
@@ -415,23 +425,59 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
             const Text('Role',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
             const SizedBox(height: 6),
-            DropdownButtonFormField<String>(
-              value: _role,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                  isDense: true, border: OutlineInputBorder()),
-              items: _kRoles
-                  .map((r) =>
-                      DropdownMenuItem(value: r, child: Text(_roleLabel(r))))
-                  .toList(),
-              onChanged: _busy
-                  ? null
-                  : (v) {
-                      if (v == null) return;
-                      setState(() => _role = v);
-                      _confirmRoleChange();
-                    },
-            ),
+            if (_role == 'exhibitor')
+              // Exhibitor accounts are created only via invite-code
+              // redemption, which also links them to one specific booth
+              // (boothId). This generic Role control can't safely change
+              // that — reassigning it here would leave the account's
+              // booth link dangling — so it's shown read-only instead of
+              // as an editable dropdown. See the _kRoles comment above.
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.exhibitorColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: AppColors.exhibitorColor.withOpacity(0.4)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.storefront_rounded,
+                        size: 16, color: AppColors.exhibitorColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        (u['boothId'] as String?)?.isNotEmpty == true
+                            ? 'Exhibitor — booth "${u['boothId']}"'
+                            : 'Exhibitor',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.exhibitorColor),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              DropdownButtonFormField<String>(
+                value: _role,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                    isDense: true, border: OutlineInputBorder()),
+                items: _kRoles
+                    .map((r) =>
+                        DropdownMenuItem(value: r, child: Text(_roleLabel(r))))
+                    .toList(),
+                onChanged: _busy
+                    ? null
+                    : (v) {
+                        if (v == null) return;
+                        setState(() => _role = v);
+                        _confirmRoleChange();
+                      },
+              ),
             const SizedBox(height: 16),
             const Text('Redemption History',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),

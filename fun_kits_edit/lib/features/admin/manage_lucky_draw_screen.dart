@@ -169,13 +169,36 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
           const SnackBar(content: Text('No participants yet!')));
       return;
     }
-    final participants = draw.participants;
+    // Only a REGISTERED participant can ever be drawn — joining a draw now
+    // requires registration going forward (see the visitor Lucky Draw
+    // screen's `_joinDraw`), but a draw already open before this feature
+    // may still have anonymous participants from before that gate existed.
+    // See FirestoreService.filterRegisteredUids for how "registered" is
+    // approximated here.
+    final eligible = await widget.fs.filterRegisteredUids(draw.participants);
+    if (eligible.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'No registered participants to draw from yet — everyone '
+                'who joined so far is still anonymous.')));
+      }
+      return;
+    }
     final winnerUid =
-        participants[(DateTime.now().millisecondsSinceEpoch) % participants.length];
+        eligible[(DateTime.now().millisecondsSinceEpoch) % eligible.length];
     await widget.fs.setWinner(draw.id, winnerUid);
     await widget.fs.addPoints(winnerUid, 'Winner', 100, gameType: 'lucky_draw');
     await widget.fs.logGameSession(winnerUid, 'lucky_draw', 100,
         exhibitorId: draw.exhibitorId.isNotEmpty ? draw.exhibitorId : null);
+    // Logs the win to the shared prize_wins hand-out checklist/"Recent
+    // Winners" list, and sends the winner their notification + simulated
+    // email — see FirestoreService.recordLuckyDrawPrizeWin.
+    await widget.fs.recordLuckyDrawPrizeWin(
+      uid: winnerUid,
+      boothId: draw.exhibitorId,
+      prizeLabel: draw.prize,
+    );
     if (mounted) {
       final name = await widget.fs.getUserDisplayName(winnerUid);
       ScaffoldMessenger.of(context).showSnackBar(

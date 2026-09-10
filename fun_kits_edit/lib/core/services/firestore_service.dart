@@ -10,9 +10,37 @@ import '../models/reward_model.dart';
 import '../models/redemption_model.dart';
 import '../models/inventory_log_model.dart';
 import '../models/game_content_model.dart';
+import '../models/notification_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  STREAM CACHE — fixes an app-wide lag/jank issue: every screen below
+  //  builds its `StreamBuilder`s with `stream: _fs.watchX(...)` called
+  //  directly inline in `build()`. Without this cache, that constructs a
+  //  brand-new `Stream` (and thus a brand-new Firestore listener) on *every
+  //  single rebuild* — not just once — because `StreamBuilder` re-subscribes
+  //  whenever the stream object identity changes. On a screen that rebuilds
+  //  often (animations, other state changes, parent rebuilds) this meant
+  //  dozens of duplicate live listeners stacking up per screen, each pulling
+  //  a fresh full snapshot from Firestore — the actual cause of the reported
+  //  lagginess. `_streamCache` is `static` (shared across every
+  //  `FirestoreService` instance, not per-instance) deliberately: this class
+  //  has no DI/singleton, and several `StatelessWidget`s construct a fresh
+  //  `FirestoreService()` inside `build()` too, so a per-instance cache
+  //  would not have fixed anything for those screens. Trade-off: once a
+  //  given query is first watched, its listener stays open (cached) for the
+  //  rest of the app session rather than being torn down when its widget is
+  //  disposed — an intentional, low-cost trade given this app's small
+  //  per-user data volume, and far cheaper than the churn it replaces.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  static final Map<String, Stream<dynamic>> _streamCache = {};
+
+  Stream<T> _cached<T>(String key, Stream<T> Function() create) {
+    return (_streamCache[key] ??= create()) as Stream<T>;
+  }
 
   // ═══════════════════════════════════════════════════════════════════════
   //  EXHIBITORS
@@ -25,6 +53,7 @@ class FirestoreService {
   /// "missing means true" default rather than being silently hidden by a
   /// query that would exclude anything lacking the field.
   Stream<List<ExhibitorModel>> getExhibitors() {
+    return _cached('getExhibitors', () {
     return _db
         .collection('exhibitors')
         .orderBy('name')
@@ -33,16 +62,19 @@ class FirestoreService {
             .map((doc) => ExhibitorModel.fromMap(doc.id, doc.data()))
             .where((e) => e.isActive)
             .toList());
-  }
+    });
+}
 
   /// Every booth regardless of active/claimed state — Super Admin's Manage
   /// Booths screen.
   Stream<List<ExhibitorModel>> getBoothsAdmin() {
+    return _cached('getBoothsAdmin', () {
     return _db.collection('exhibitors').orderBy('name').snapshots().map(
         (snap) => snap.docs
             .map((doc) => ExhibitorModel.fromMap(doc.id, doc.data()))
             .toList());
-  }
+    });
+}
 
   Future<void> addExhibitor(ExhibitorModel exhibitor) async {
     await _db.collection('exhibitors').add(exhibitor.toMap());
@@ -148,6 +180,7 @@ class FirestoreService {
   /// Admin's Manage Booths screen shows whether a booth's latest code is
   /// still unused or already claimed.
   Stream<List<Map<String, dynamic>>> getInvitesForBooth(String boothId) {
+    return _cached('getInvitesForBooth:$boothId', () {
     return _db
         .collection('exhibitor_invites')
         .where('boothId', isEqualTo: boothId)
@@ -162,7 +195,8 @@ class FirestoreService {
       });
       return docs;
     });
-  }
+    });
+}
 
   /// Redeems an exhibitor invite [code] for the just-created Firebase Auth
   /// account [uid]. Atomically: validates the code is unused and its booth
@@ -231,11 +265,13 @@ class FirestoreService {
   /// Live view of one booth — the Exhibitor Dashboard's own booth, updating
   /// immediately as the exhibitor edits it.
   Stream<ExhibitorModel?> watchExhibitor(String boothId) {
+    return _cached('watchExhibitor:$boothId', () {
     return _db.collection('exhibitors').doc(boothId).snapshots().map((doc) =>
         doc.exists && doc.data() != null
             ? ExhibitorModel.fromMap(doc.id, doc.data()!)
             : null);
-  }
+    });
+}
 
   /// Fallback lookup for manual booth-code entry (e.g. camera unavailable).
   Future<ExhibitorModel?> getExhibitorByBoothNumber(String boothNumber) async {
@@ -254,6 +290,7 @@ class FirestoreService {
   // ═══════════════════════════════════════════════════════════════════════
 
   Stream<List<QuizModel>> getQuizzes() {
+    return _cached('getQuizzes', () {
     return _db
         .collection('quizzes')
         .where('isActive', isEqualTo: true)
@@ -261,7 +298,8 @@ class FirestoreService {
         .map((snap) => snap.docs
             .map((doc) => QuizModel.fromMap(doc.id, doc.data()))
             .toList());
-  }
+    });
+}
 
   Future<void> addQuiz(QuizModel quiz) async {
     await _db.collection('quizzes').add(quiz.toMap());
@@ -296,6 +334,7 @@ class FirestoreService {
   /// Active quizzes belonging to a single booth — used on the booth screen
   /// reached via QR scan.
   Stream<List<QuizModel>> getQuizzesForExhibitor(String exhibitorId) {
+    return _cached('getQuizzesForExhibitor:$exhibitorId', () {
     return _db
         .collection('quizzes')
         .where('isActive', isEqualTo: true)
@@ -304,13 +343,15 @@ class FirestoreService {
         .map((snap) => snap.docs
             .map((doc) => QuizModel.fromMap(doc.id, doc.data()))
             .toList());
-  }
+    });
+}
 
   /// Every quiz belonging to a single booth, active or not — the
   /// exhibitor's OWN Manage Quizzes screen (unlike the visitor-facing
   /// method above, this must show inactive quizzes too so they can be
   /// re-enabled/edited, not just newly created ones).
   Stream<List<QuizModel>> getQuizzesForExhibitorAdmin(String exhibitorId) {
+    return _cached('getQuizzesForExhibitorAdmin:$exhibitorId', () {
     return _db
         .collection('quizzes')
         .where('exhibitorId', isEqualTo: exhibitorId)
@@ -318,13 +359,15 @@ class FirestoreService {
         .map((snap) => snap.docs
             .map((doc) => QuizModel.fromMap(doc.id, doc.data()))
             .toList());
-  }
+    });
+}
 
   // ═══════════════════════════════════════════════════════════════════════
   //  LUCKY DRAWS
   // ═══════════════════════════════════════════════════════════════════════
 
   Stream<List<LuckyDrawModel>> getLuckyDraws() {
+    return _cached('getLuckyDraws', () {
     return _db
         .collection('lucky_draws')
         .where('isActive', isEqualTo: true)
@@ -332,10 +375,12 @@ class FirestoreService {
         .map((snap) => snap.docs
             .map((doc) => LuckyDrawModel.fromMap(doc.id, doc.data()))
             .toList());
-  }
+    });
+}
 
   /// Active lucky draws belonging to a single booth.
   Stream<List<LuckyDrawModel>> getLuckyDrawsForExhibitor(String exhibitorId) {
+    return _cached('getLuckyDrawsForExhibitor:$exhibitorId', () {
     return _db
         .collection('lucky_draws')
         .where('isActive', isEqualTo: true)
@@ -344,12 +389,14 @@ class FirestoreService {
         .map((snap) => snap.docs
             .map((doc) => LuckyDrawModel.fromMap(doc.id, doc.data()))
             .toList());
-  }
+    });
+}
 
   /// Every lucky draw belonging to a single booth, active or not — the
   /// exhibitor's own Manage Lucky Draws screen.
   Stream<List<LuckyDrawModel>> getLuckyDrawsForExhibitorAdmin(
       String exhibitorId) {
+    return _cached('getLuckyDrawsForExhibitorAdmin:$exhibitorId', () {
     return _db
         .collection('lucky_draws')
         .where('exhibitorId', isEqualTo: exhibitorId)
@@ -357,17 +404,20 @@ class FirestoreService {
         .map((snap) => snap.docs
             .map((doc) => LuckyDrawModel.fromMap(doc.id, doc.data()))
             .toList());
-  }
+    });
+}
 
   // All draws including inactive (for admin)
   Stream<List<LuckyDrawModel>> getAllLuckyDraws() {
+    return _cached('getAllLuckyDraws', () {
     return _db
         .collection('lucky_draws')
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => LuckyDrawModel.fromMap(doc.id, doc.data()))
             .toList());
-  }
+    });
+}
 
   Future<void> joinLuckyDraw(String drawId, String uid) async {
     await _db.collection('lucky_draws').doc(drawId).update({
@@ -410,6 +460,7 @@ class FirestoreService {
   // ═══════════════════════════════════════════════════════════════════════
 
   Stream<List<LeaderboardEntry>> getLeaderboard() {
+    return _cached('getLeaderboard', () {
     return _db
         .collection('leaderboard')
         .orderBy('totalPoints', descending: true)
@@ -422,7 +473,8 @@ class FirestoreService {
         return entry.withRank(rank++);
       }).toList();
     });
-  }
+    });
+}
 
   Future<String?> getUserDisplayName(String uid) async {
     try {
@@ -536,17 +588,20 @@ class FirestoreService {
   /// getExhibitorLeaderboard() above (no server-side group-by at
   /// prototype scale).
   Stream<List<Map<String, dynamic>>> getBoothSessions(String boothId) {
+    return _cached('getBoothSessions:$boothId', () {
     return _db
         .collection('game_sessions')
         .where('exhibitorId', isEqualTo: boothId)
         .snapshots()
         .map((snap) => snap.docs.map((d) => d.data()).toList());
-  }
+    });
+}
 
   /// A visitor's own points-earning history (newest first) — powers the
   /// Points History screen linked from Home. Bounded to the most recent
   /// 200 entries; fine at prototype scale.
   Stream<List<Map<String, dynamic>>> getPointsHistory(String uid) {
+    return _cached('getPointsHistory:$uid', () {
     return _db
         .collection('game_sessions')
         .where('uid', isEqualTo: uid)
@@ -554,13 +609,15 @@ class FirestoreService {
         .limit(200)
         .snapshots()
         .map((snap) => snap.docs.map((d) => d.data()).toList());
-  }
+    });
+}
 
   // ═══════════════════════════════════════════════════════════════════════
   //  PUZZLES
   // ═══════════════════════════════════════════════════════════════════════
 
   Stream<List<PuzzleModel>> getPuzzles() {
+    return _cached('getPuzzles', () {
     return _db
         .collection('puzzles')
         .where('isActive', isEqualTo: true)
@@ -568,7 +625,8 @@ class FirestoreService {
         .map((snap) => snap.docs
             .map((doc) => PuzzleModel.fromMap(doc.id, doc.data()))
             .toList());
-  }
+    });
+}
 
   Future<void> addPuzzle(PuzzleModel puzzle) async {
     await _db.collection('puzzles').add(puzzle.toMap());
@@ -691,10 +749,12 @@ class FirestoreService {
   /// Live view of [boothId]'s shared attempt pool for [uid] — powers the
   /// booth screen's "X attempts left" badges and Booth Tasks progress.
   Stream<BoothAttemptPool> watchAttemptPool(String uid, String boothId) {
+    return _cached('watchAttemptPool:$uid:$boothId', () {
     return _gamePlayRef(uid, boothId)
         .snapshots()
         .map((snap) => BoothAttemptPool.fromMap(snap.data()));
-  }
+    });
+}
 
   /// Assigns (or re-rolls) the up-to-2 game types shown on the "Play a
   /// Mini-Game" booth task — called once each time the visitor opens a
@@ -792,8 +852,10 @@ class FirestoreService {
 
   /// Live view of `users/{uid}` — displayName, avatarEmoji, loginStreak, etc.
   Stream<DocumentSnapshot<Map<String, dynamic>>> watchUserProfile(String uid) {
+    return _cached('watchUserProfile:$uid', () {
     return _db.collection('users').doc(uid).snapshots();
-  }
+    });
+}
 
   Future<void> updateVisitorProfile(
     String uid, {
@@ -887,6 +949,7 @@ class FirestoreService {
   /// that field, so visitors who never played this game are naturally
   /// excluded rather than showing up with a false "0".
   Stream<List<LeaderboardEntry>> getLeaderboardByGame(String gameType) {
+    return _cached('getLeaderboardByGame:$gameType', () {
     return _db
         .collection('leaderboard')
         .orderBy('gameBreakdown.$gameType', descending: true)
@@ -899,7 +962,8 @@ class FirestoreService {
         return entry.withRank(rank++);
       }).toList();
     });
-  }
+    });
+}
 
   /// Per-exhibitor (booth) leaderboard: sums each visitor's points from
   /// `game_sessions` logged at this booth. Firestore has no server-side
@@ -907,6 +971,7 @@ class FirestoreService {
   /// prototype scale (one booth's session log), not meant for huge volumes.
   Stream<List<ExhibitorLeaderboardEntry>> getExhibitorLeaderboard(
       String exhibitorId) {
+    return _cached('getExhibitorLeaderboard:$exhibitorId', () {
     return _db
         .collection('game_sessions')
         .where('exhibitorId', isEqualTo: exhibitorId)
@@ -949,7 +1014,8 @@ class FirestoreService {
       int rank = 1;
       return rows.take(50).map((e) => e.withRank(rank++)).toList();
     });
-  }
+    });
+}
 
   // ═══════════════════════════════════════════════════════════════════════
   //  REWARDS (E-VOUCHERS) — the Points Shop catalogue. Entirely
@@ -960,6 +1026,7 @@ class FirestoreService {
 
   /// What the Shop screen shows a visitor — active rewards only.
   Stream<List<RewardModel>> getActiveRewards() {
+    return _cached('getActiveRewards', () {
     return _db
         .collection('rewards')
         .where('isActive', isEqualTo: true)
@@ -968,16 +1035,19 @@ class FirestoreService {
             .map((d) => RewardModel.fromMap(d.id, d.data()))
             .toList()
           ..sort((a, b) => a.brandName.compareTo(b.brandName)));
-  }
+    });
+}
 
   /// Every reward regardless of active state — Super Admin's Manage
   /// Rewards / Manage Inventory screens.
   Stream<List<RewardModel>> getAllRewardsAdmin() {
+    return _cached('getAllRewardsAdmin', () {
     return _db.collection('rewards').snapshots().map((snap) => snap.docs
         .map((d) => RewardModel.fromMap(d.id, d.data()))
         .toList()
       ..sort((a, b) => a.brandName.compareTo(b.brandName)));
-  }
+    });
+}
 
   Future<String> addReward(RewardModel reward) async {
     final ref = await _db.collection('rewards').add({
@@ -1081,11 +1151,26 @@ class FirestoreService {
       });
 
       return RedemptionOutcome.success(redemptionRef.id);
+    }).then((outcome) async {
+      // Notify outside the transaction (same pattern as playPrizeGame's
+      // addPoints/prize_wins calls) — the caller is already past the "must
+      // be registered" gate, so this account's email is real.
+      if (outcome.success) {
+        await _notifyUser(
+          uid: uid,
+          title: '🎉 Redemption Confirmed',
+          body: 'Your redemption is on its way — check "My Redemptions" for '
+              'delivery details.',
+          type: 'redemption',
+        );
+      }
+      return outcome;
     });
   }
 
   /// A visitor's own redemption history, newest first.
   Stream<List<RedemptionModel>> getUserRedemptions(String uid) {
+    return _cached('getUserRedemptions:$uid', () {
     return _db
         .collection('redemptions')
         .where('userId', isEqualTo: uid)
@@ -1094,13 +1179,15 @@ class FirestoreService {
         .map((snap) => snap.docs
             .map((d) => RedemptionModel.fromMap(d.id, d.data()))
             .toList());
-  }
+    });
+}
 
   /// Every redemption in the system, newest first — Super Admin's Manage
   /// Redemptions screen does its user/email/reward/brand/status/date
   /// filtering client-side over this (prototype scale; same pattern
   /// already used for the per-booth leaderboard aggregation).
   Stream<List<RedemptionModel>> getAllRedemptions() {
+    return _cached('getAllRedemptions', () {
     return _db
         .collection('redemptions')
         .orderBy('createdAt', descending: true)
@@ -1109,7 +1196,8 @@ class FirestoreService {
         .map((snap) => snap.docs
             .map((d) => RedemptionModel.fromMap(d.id, d.data()))
             .toList());
-  }
+    });
+}
 
   /// Plain status change (no point/stock movement) — normal fulfillment
   /// progression, e.g. Pending Delivery → Processing → Delivered.
@@ -1212,6 +1300,7 @@ class FirestoreService {
   }
 
   Stream<List<InventoryLogModel>> getInventoryLogs({String? rewardId}) {
+    return _cached('getInventoryLogs:${rewardId ?? "_all"}', () {
     Query<Map<String, dynamic>> q = _db.collection('inventory_logs');
     if (rewardId != null) q = q.where('rewardId', isEqualTo: rewardId);
     return q
@@ -1221,7 +1310,8 @@ class FirestoreService {
         .map((snap) => snap.docs
             .map((d) => InventoryLogModel.fromMap(d.id, d.data()))
             .toList());
-  }
+    });
+}
 
   // ═══════════════════════════════════════════════════════════════════════
   //  REWARDS CONFIG — currently just the low-stock threshold, kept
@@ -1231,6 +1321,7 @@ class FirestoreService {
   static const int defaultLowStockThreshold = 10;
 
   Stream<int> getLowStockThreshold() {
+    return _cached('getLowStockThreshold', () {
     return _db
         .collection('app_config')
         .doc('rewards')
@@ -1238,7 +1329,8 @@ class FirestoreService {
         .map((doc) =>
             (doc.data()?['lowStockThreshold'] as num?)?.toInt() ??
             defaultLowStockThreshold);
-  }
+    });
+}
 
   Future<void> setLowStockThreshold(int threshold) async {
     await _db.collection('app_config').doc('rewards').set(
@@ -1256,9 +1348,11 @@ class FirestoreService {
   // ═══════════════════════════════════════════════════════════════════════
 
   Stream<List<Map<String, dynamic>>> getAllUsersAdmin() {
+    return _cached('getAllUsersAdmin', () {
     return _db.collection('users').snapshots().map((snap) =>
         snap.docs.map((d) => {'uid': d.id, ...d.data()}).toList());
-  }
+    });
+}
 
   /// Adds (positive) or removes (negative) points from a user's balance as
   /// a deliberate Super Admin action — distinct from a visitor earning
@@ -1369,9 +1463,11 @@ class FirestoreService {
   }
 
   Stream<SpinWheelConfig?> watchSpinWheelConfig(String boothId) {
+    return _cached('watchSpinWheelConfig:$boothId', () {
     return _gameContentRef(boothId, 'spin_wheel').snapshots().map(
         (snap) => snap.exists ? SpinWheelConfig.fromMap(boothId, snap.data()!) : null);
-  }
+    });
+}
 
   Future<void> saveSpinWheelConfig(SpinWheelConfig config) async {
     final map = config.toMap();
@@ -1387,9 +1483,11 @@ class FirestoreService {
   }
 
   Stream<ScratchCardConfig?> watchScratchCardConfig(String boothId) {
+    return _cached('watchScratchCardConfig:$boothId', () {
     return _gameContentRef(boothId, 'scratch_card').snapshots().map((snap) =>
         snap.exists ? ScratchCardConfig.fromMap(boothId, snap.data()!) : null);
-  }
+    });
+}
 
   Future<void> saveScratchCardConfig(ScratchCardConfig config) async {
     final map = config.toMap();
@@ -1405,9 +1503,11 @@ class FirestoreService {
   }
 
   Stream<GuessNumberConfig?> watchGuessNumberConfig(String boothId) {
+    return _cached('watchGuessNumberConfig:$boothId', () {
     return _gameContentRef(boothId, 'guess_number').snapshots().map((snap) =>
         snap.exists ? GuessNumberConfig.fromMap(boothId, snap.data()!) : null);
-  }
+    });
+}
 
   Future<void> saveGuessNumberConfig(GuessNumberConfig config) async {
     final map = config.toMap();
@@ -1423,9 +1523,11 @@ class FirestoreService {
   }
 
   Stream<MemoryPairsConfig?> watchMemoryPairsConfig(String boothId) {
+    return _cached('watchMemoryPairsConfig:$boothId', () {
     return _gameContentRef(boothId, 'memory_matrix').snapshots().map((snap) =>
         snap.exists ? MemoryPairsConfig.fromMap(boothId, snap.data()!) : null);
-  }
+    });
+}
 
   Future<void> saveMemoryPairsConfig(MemoryPairsConfig config) async {
     final map = config.toMap();
@@ -1510,6 +1612,18 @@ class FirestoreService {
         'collected': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
+      // Physical prizes only (a points win stays silent — see the Prize Win
+      // Notifications round's confirmed scope) — the caller is already past
+      // the "must be registered" gate, so this account's email is real.
+      final boothName = await _getBoothName(boothId);
+      final gameLabel = gameType == 'spin_wheel' ? 'Spin Wheel' : 'Scratch Card';
+      await _notifyUser(
+        uid: uid,
+        title: '🎉 You Won a Prize!',
+        body: 'You won "${picked.label}" at $boothName\'s $gameLabel! Show '
+            'your account to the booth staff to collect it.',
+        type: 'prize_win',
+      );
     }
     await logGameSession(uid, gameType, picked.isPoints ? picked.pointsValue : 0,
         exhibitorId: boothId);
@@ -1519,6 +1633,7 @@ class FirestoreService {
   /// Physical-prize wins for [boothId], newest first — the exhibitor's
   /// "Prize Wins" hand-out checklist.
   Stream<List<PrizeWinModel>> getPrizeWins(String boothId) {
+    return _cached('getPrizeWins:$boothId', () {
     return _db
         .collection('prize_wins')
         .where('boothId', isEqualTo: boothId)
@@ -1526,11 +1641,166 @@ class FirestoreService {
         .snapshots()
         .map((snap) =>
             snap.docs.map((d) => PrizeWinModel.fromMap(d.id, d.data())).toList());
-  }
+    });
+}
 
   /// Ticks a physical prize win as handed out in person (or un-ticks it).
   Future<void> markPrizeCollected(String winId, bool collected) async {
     await _db.collection('prize_wins').doc(winId).update({'collected': collected});
+  }
+
+  /// A booth's most recent physical-prize wins, across Lucky Draw, Spin
+  /// Wheel and Scratch Card alike (all three write to `prize_wins` — see
+  /// [recordLuckyDrawPrizeWin] and [playPrizeGame]'s physical branch) —
+  /// powers each game screen's "Recent Winners" panel. Returns the real
+  /// display name; masking it (see maskWinnerName) is the UI's job.
+  Stream<List<PrizeWinModel>> getRecentPrizeWins(String boothId,
+      {int limit = 5}) {
+    return _cached('getRecentPrizeWins:$boothId:$limit', () {
+    return _db
+        .collection('prize_wins')
+        .where('boothId', isEqualTo: boothId)
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => PrizeWinModel.fromMap(d.id, d.data()))
+            .toList());
+    });
+}
+
+  /// Best-effort exhibitor display name for [boothId], used only inside
+  /// notification/email copy — falls back to a generic phrase rather than
+  /// failing the win/redemption it's attached to.
+  Future<String> _getBoothName(String boothId) async {
+    if (boothId.isEmpty) return 'the booth';
+    final snap = await _db.collection('exhibitors').doc(boothId).get();
+    final name = snap.data()?['name'] as String?;
+    return (name != null && name.isNotEmpty) ? name : 'the booth';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  REGISTRATION GATE HELPER — Lucky Draw joining, Spin Wheel/Scratch Card
+  //  playing, and Rewards Shop redemption all now require a REGISTERED
+  //  (non-anonymous) account (see the Prize Win Notifications round) so a
+  //  winner always has somewhere real to be notified. The gate itself is
+  //  enforced client-side at each action's call site (an anonymous visitor
+  //  simply never reaches these methods — see showRegisterRequiredDialog);
+  //  this helper only handles a Lucky Draw's own pre-existing participant
+  //  list, which may still contain uids that joined before this rule
+  //  existed and never registered.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Returns the subset of [uids] that belong to a registered account —
+  /// approximated by a non-empty `email` on their `users/{uid}` doc, since
+  /// there is no way to read another uid's Firebase Auth anonymous flag
+  /// from Firestore alone. Used by ManageLuckyDrawScreen's "Draw Winner" so
+  /// an anonymous participant who joined before this feature can never be
+  /// picked (going forward, joining itself is gated — see the visitor
+  /// Lucky Draw screen's `_joinDraw`).
+  Future<List<String>> filterRegisteredUids(List<String> uids) async {
+    final registered = <String>[];
+    for (final uid in uids) {
+      final snap = await _db.collection('users').doc(uid).get();
+      final email = snap.data()?['email'] as String? ?? '';
+      if (email.isNotEmpty) registered.add(uid);
+    }
+    return registered;
+  }
+
+  /// Lucky Draw's counterpart to [playPrizeGame]'s physical-prize branch —
+  /// called once ManageLuckyDrawScreen picks a winner, so a Lucky Draw win
+  /// lands on the same `prize_wins` hand-out checklist and "Recent Winners"
+  /// list as Spin Wheel/Scratch Card physical prizes, and triggers the same
+  /// notification/simulated-email as any other prize win.
+  Future<void> recordLuckyDrawPrizeWin({
+    required String uid,
+    required String boothId,
+    required String prizeLabel,
+  }) async {
+    final name = await getUserDisplayName(uid) ?? 'Player';
+    await _db.collection('prize_wins').add({
+      'uid': uid,
+      'userName': name,
+      'boothId': boothId,
+      'gameType': 'lucky_draw',
+      'prizeLabel': prizeLabel,
+      'collected': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    final boothName = await _getBoothName(boothId);
+    await _notifyUser(
+      uid: uid,
+      title: '🎉 You Won the Lucky Draw!',
+      body: 'You won "$prizeLabel" at $boothName\'s Lucky Draw! Show your '
+          'account to the booth staff to collect it.',
+      type: 'prize_win',
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  NOTIFICATIONS & SIMULATED EMAIL — this app has no backend/Cloud
+  //  Functions, so a real "send an email" step isn't possible from the
+  //  client alone. A prize win or voucher redemption instead writes:
+  //    1. a `notifications/{id}` doc (uid-scoped) — the real, user-visible
+  //       side: the bell-icon inbox on Home with an unread badge.
+  //    2. an `email_log/{id}` doc — a technical, NOT user-facing record of
+  //       "the email that would have been sent" (recipient/subject/body),
+  //       kept only so a future real email backend has something to
+  //       replace this with. No screen in this app reads it.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Writes both the in-app notification and the simulated email-log entry
+  /// for a win/redemption. Every caller of this is already past the
+  /// "must be registered" gate, so the recipient's `users/{uid}.email` is
+  /// always real by the time this runs.
+  Future<void> _notifyUser({
+    required String uid,
+    required String title,
+    required String body,
+    required String type,
+  }) async {
+    await _db.collection('notifications').add({
+      'uid': uid,
+      'title': title,
+      'body': body,
+      'type': type,
+      'read': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    final userSnap = await _db.collection('users').doc(uid).get();
+    final email = userSnap.data()?['email'] as String? ?? '';
+    if (email.isNotEmpty) {
+      await _db.collection('email_log').add({
+        'toEmail': email,
+        'toUid': uid,
+        'subject': title,
+        'body': body,
+        'type': type,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
+  /// A visitor's own notifications, newest first — powers the Notifications
+  /// inbox screen and Home's bell-icon unread badge.
+  Stream<List<NotificationModel>> watchNotifications(String uid) {
+    return _cached('watchNotifications:$uid', () {
+    return _db
+        .collection('notifications')
+        .where('uid', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => NotificationModel.fromMap(d.id, d.data()))
+            .toList());
+    });
+}
+
+  Future<void> markNotificationRead(String id) async {
+    await _db.collection('notifications').doc(id).update({'read': true});
   }
 }
 

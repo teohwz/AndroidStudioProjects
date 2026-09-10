@@ -81,14 +81,24 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen> {
     // A brand-new visitor sees the Register screen, not the later
     // "Save My Points" prompt (that one's reserved for someone who
     // already has points at stake and wants to rank/redeem) — see
-    // VisitorRegisterScreen's doc comment.
-    Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const VisitorRegisterScreen()));
+    // VisitorRegisterScreen's doc comment. Its "Skip — Continue as Guest"
+    // button only makes sense on a true first launch (this RoleChoiceScreen
+    // is itself the bootstrap root, i.e. !canPop()) — reached via "Switch
+    // Role" instead, the visitor already has somewhere to go back to.
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => VisitorRegisterScreen(
+            showSkip: !Navigator.of(context).canPop())));
   }
 
   void _continueAsExhibitor() {
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+    // Hide LoginScreen's "Not exhibitors? Change role" link specifically
+    // when this RoleChoiceScreen instance was reached via a visitor's
+    // "Switch Role" (hideRole == 'visitor') — that switch was itself the
+    // deliberate way in, so no extra way back out is needed. Left visible
+    // everywhere else, including true first launch (hideRole == null).
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) =>
+            LoginScreen(hideChangeRole: widget.hideRole == 'visitor')));
   }
 
   @override

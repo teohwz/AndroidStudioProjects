@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/lucky_draw_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/utils/mask_name.dart';
+import '../../shared/widgets/register_required_dialog.dart';
 
 class LuckyDrawScreen extends StatefulWidget {
   const LuckyDrawScreen({super.key, this.exhibitorId});
@@ -42,13 +44,17 @@ class _LuckyDrawScreenState extends State<LuckyDrawScreen> {
       : _fs.getLuckyDraws();
 
   Future<void> _loadWinnerNames() async {
-    // Get all draws and load winner names
+    // Get all draws and load winner names — masked (see maskWinnerName):
+    // this screen is visible to every visitor at the booth, not just the
+    // winner, so the real name never appears here (contrast with
+    // ManageLuckyDrawScreen's exhibitor-facing view, which needs the real
+    // name to identify who to hand the prize to).
     final draws = await _draws.first;
     final names = <String, String>{};
     for (final draw in draws) {
       if (draw.winnerUid != null) {
         final name = await _fs.getUserDisplayName(draw.winnerUid!);
-        names[draw.id] = name ?? 'User';
+        names[draw.id] = maskWinnerName(name);
       }
     }
     if (mounted) setState(() => _winnerNames = names);
@@ -57,6 +63,14 @@ class _LuckyDrawScreenState extends State<LuckyDrawScreen> {
   Future<void> _joinDraw(LuckyDrawModel draw) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    // Joining now requires a registered account (see the Prize Win
+    // Notifications round) — a winner always needs somewhere real to be
+    // notified. An anonymous visitor is prompted to register instead.
+    if (user.isAnonymous) {
+      showRegisterRequiredDialog(context, action: 'join a Lucky Draw');
+      return;
+    }
 
     // Already in this draw
     if (draw.participants.contains(user.uid)) {

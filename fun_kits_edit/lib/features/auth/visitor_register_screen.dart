@@ -17,7 +17,17 @@ import 'visitor_login_screen.dart';
 /// [AuthService.linkEmail] under the hood, but are kept as separate screens
 /// with separate framing since the audience and moment are different.
 class VisitorRegisterScreen extends StatefulWidget {
-  const VisitorRegisterScreen({super.key});
+  const VisitorRegisterScreen({super.key, this.showSkip = false});
+
+  /// True only on the true first-ever app launch (RoleChoiceScreen reached
+  /// as the app's bootstrap root, not via "Switch Role") — the one case
+  /// where "Skip — Continue as Guest" is shown. Every other path that
+  /// reaches this screen (Home's Register menu item, Save My Points,
+  /// registration-required prompts, the Visitor sign-in screen's Register
+  /// link, and Switch Role → I am a Visitor) leaves this false, so the
+  /// button stays hidden — those visitors already have somewhere to go
+  /// back to.
+  final bool showSkip;
 
   @override
   State<VisitorRegisterScreen> createState() => _VisitorRegisterScreenState();
@@ -229,16 +239,18 @@ class _VisitorRegisterScreenState extends State<VisitorRegisterScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Center(
-                    child: TextButton(
-                      onPressed: _skip,
-                      child: const Text(
-                        'Skip — Continue as Guest',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, color: subtitleColor),
+                  if (widget.showSkip)
+                    Center(
+                      child: TextButton(
+                        onPressed: _skip,
+                        child: const Text(
+                          'Skip — Continue as Guest',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: subtitleColor),
+                        ),
                       ),
                     ),
-                  ),
                   const SizedBox(height: 24),
                 ],
               ),

@@ -8,11 +8,13 @@ import 'package:animate_do/animate_do.dart';
 import 'package:confetti/confetti.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/models/notification_model.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/firestore_service.dart';
 import '../../app/routes.dart';
 import '../auth/role_choice_screen.dart';
 import '../auth/visitor_register_screen.dart';
+import '../notifications/notifications_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════════════
 //  LEVEL SYSTEM — purely client-side, derived from totalPoints. No new
@@ -458,6 +460,7 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(
               color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
       actions: [
+        _NotificationBell(uid: auth.currentUser?.uid),
         PopupMenuButton<String>(
           icon: const CircleAvatar(
               backgroundColor: Colors.white24,
@@ -493,6 +496,39 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ],
+    );
+  }
+}
+
+// ── Notification bell (Home app bar) ─────────────────────────────────────
+// Shows an unread-count badge from FirestoreService.watchNotifications and
+// opens the NotificationsScreen inbox — see the Prize Win Notifications
+// round. Hidden entirely if there's no signed-in user yet (a brief window
+// during app bootstrap only).
+class _NotificationBell extends StatelessWidget {
+  const _NotificationBell({required this.uid});
+  final String? uid;
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = this.uid;
+    if (uid == null) return const SizedBox.shrink();
+    final fs = FirestoreService();
+    return StreamBuilder<List<NotificationModel>>(
+      stream: fs.watchNotifications(uid),
+      builder: (context, snap) {
+        final unread = (snap.data ?? []).where((n) => !n.read).length;
+        return IconButton(
+          tooltip: 'Notifications',
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const NotificationsScreen())),
+          icon: Badge(
+            label: Text('$unread'),
+            isLabelVisible: unread > 0,
+            child: const Icon(Icons.notifications_rounded, color: Colors.white),
+          ),
+        );
+      },
     );
   }
 }

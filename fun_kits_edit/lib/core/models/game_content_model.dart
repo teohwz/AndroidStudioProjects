@@ -255,12 +255,14 @@ class MemoryPairsConfig {
 /// A logged physical-prize win, for the exhibitor's in-person hand-out
 /// tracking. Points-type wins are paid out immediately via addPoints() and
 /// are NOT logged here — only physical prizes need a "collected" checklist.
+/// Also powers the shared "Recent Winners" list on the Lucky Draw/Spin
+/// Wheel/Scratch Card screens (see FirestoreService.getRecentPrizeWins).
 class PrizeWinModel {
   final String id;
   final String uid;
   final String userName;
   final String boothId;
-  final String gameType; // 'spin_wheel' | 'scratch_card'
+  final String gameType; // 'spin_wheel' | 'scratch_card' | 'lucky_draw'
   final String prizeLabel;
   final bool collected;
   final DateTime? createdAt;

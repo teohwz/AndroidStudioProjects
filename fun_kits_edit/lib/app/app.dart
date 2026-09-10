@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../core/constants/app_colors.dart';
 import '../core/services/auth_service.dart';
+import '../core/services/firestore_service.dart';
 import '../features/home/home_screen.dart';
 import '../features/admin/super_admin_dashboard_screen.dart';
 import '../features/exhibitor/exhibitor_dashboard_screen.dart';
@@ -69,12 +70,19 @@ class FunKitsApp extends StatelessWidget {
           }
           // Ban check is live (a stream, not the login-time-cached role) so
           // a Super Admin banning someone takes effect immediately, without
-          // requiring the banned user to sign out first.
+          // requiring the banned user to sign out first. Routed through
+          // FirestoreService.watchUserProfile() (its stream cache, keyed by
+          // uid) rather than a raw inline `.snapshots()` call — this widget
+          // sits at the very root of the app and rebuilds on every single
+          // AuthService.notifyListeners() call, so a raw inline stream here
+          // was re-subscribing a fresh Firestore listener on every one of
+          // those (isLoading toggles, role changes, auth state changes —
+          // several of which fire in quick succession during register/
+          // logout/switch-role), which is exactly what made that flow feel
+          // laggy even after the app-wide stream-caching fix, since this
+          // one spot never went through FirestoreService at all.
           return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(auth.currentUser!.uid)
-                .snapshots(),
+            stream: FirestoreService().watchUserProfile(auth.currentUser!.uid),
             builder: (context, snap) {
               final status = snap.data?.data()?['accountStatus'] as String?;
               if (status == 'banned') {

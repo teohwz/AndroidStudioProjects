@@ -7,6 +7,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/brand_styles.dart';
 import '../../core/models/reward_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../shared/widgets/register_required_dialog.dart';
 import '../../app/routes.dart';
 
 /// Points Shop — a real e-voucher marketplace: visitors spend points earned
@@ -28,6 +29,16 @@ class _ShopScreenState extends State<ShopScreen> {
 
   Future<void> _onRedeemTapped(RewardModel reward, int points) async {
     if (reward.isOutOfStock || _busy) return;
+
+    // Redeeming now requires a registered account (see the Prize Win
+    // Notifications round) — a redemption always needs a real email to
+    // send delivery details to. An anonymous visitor is prompted to
+    // register instead of ever reaching the redeem dialog.
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || currentUser.isAnonymous) {
+      showRegisterRequiredDialog(context, action: 'redeem a voucher');
+      return;
+    }
 
     if (points < reward.pointsRequired) {
       final needed = reward.pointsRequired - points;
@@ -57,23 +68,26 @@ class _ShopScreenState extends State<ShopScreen> {
       return;
     }
 
-    final user = FirebaseAuth.instance.currentUser;
+    // currentUser is guaranteed registered here (the gate above already
+    // returned for anonymous/null), so the delivery email always pre-fills
+    // with a real registered address — still editable, per the confirmed
+    // requirement, in case the visitor wants a different delivery address.
     final result = await showDialog<_RedeemDialogResult>(
       context: context,
       builder: (_) => _RedeemConfirmationDialog(
         reward: reward,
         currentPoints: points,
-        prefillEmail: (!(user?.isAnonymous ?? true)) ? (user?.email) : null,
+        prefillEmail: currentUser.email,
       ),
     );
     if (result == null || !mounted) return;
 
     setState(() => _busy = true);
     final outcome = await _fs.redeemReward(
-      uid: user!.uid,
+      uid: currentUser.uid,
       rewardId: reward.id,
       deliveryEmail: result.email,
-      accountEmail: (!user.isAnonymous) ? user.email : null,
+      accountEmail: currentUser.email,
     );
     if (!mounted) return;
     setState(() => _busy = false);

@@ -5,9 +5,10 @@ import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
 
 /// Exhibitor-scoped hand-out checklist for physical prizes won at [boothId]
-/// via the Spin Wheel or Scratch Card (points wins are paid out
-/// automatically and never appear here — see FirestoreService.playPrizeGame).
-/// Tick a win off once the visitor has collected it in person.
+/// via the Spin Wheel, Scratch Card, or Lucky Draw (points wins are paid
+/// out automatically and never appear here — see
+/// FirestoreService.playPrizeGame/recordLuckyDrawPrizeWin). Tick a win off
+/// once the visitor has collected it in person.
 class ExhibitorPrizeWinsScreen extends StatelessWidget {
   const ExhibitorPrizeWinsScreen({super.key, required this.boothId});
 
@@ -95,9 +96,15 @@ class _PrizeWinTile extends StatelessWidget {
             style: TextStyle(
                 fontWeight: FontWeight.w700,
                 decoration: win.collected ? TextDecoration.lineThrough : null)),
-        subtitle: Text(
-            '${win.userName} · ${win.gameType == 'spin_wheel' ? '🎡 Spin Wheel' : '🪙 Scratch Card'}'),
+        subtitle: Text('${win.userName} · ${_gameLabel(win.gameType)}'),
       ),
     );
   }
+
+  String _gameLabel(String gameType) => switch (gameType) {
+        'spin_wheel' => '🎡 Spin Wheel',
+        'scratch_card' => '🪙 Scratch Card',
+        'lucky_draw' => '🎰 Lucky Draw',
+        _ => gameType,
+      };
 }

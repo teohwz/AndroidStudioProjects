@@ -70,6 +70,19 @@ rules_version = '2';
 //  visitor could in principle manipulate their own view of a booth's
 //  remaining prize stock. Same limited blast radius as above: a visitor's
 //  own play experience only, never another user's or exhibitor's data.
+//
+//  PRIZE WIN NOTIFICATIONS round: Lucky Draw joining and Rewards Shop
+//  redemption now require a REGISTERED (non-anonymous) account —
+//  isAnonymousUser() reads this straight off the Firebase Auth token, so
+//  it's a real, server-side-enforced gate, not just a client-side check.
+//  Spin Wheel/Scratch Card's own "must be registered to play" gate is
+//  enforced CLIENT-SIDE ONLY (see spin_wheel_screen.dart/scratch_card_
+//  screen.dart's `_spin`/`_play`) — their actual play-limit write
+//  (`game_plays/{uid}_{boothId}`) is shared across every generic game at
+//  that booth, not just these two, so it has no per-game-type field to
+//  gate on server-side without a deeper redesign. `notifications` and
+//  `email_log` are both bound to the writer's own uid, same trust model as
+//  every other user-authored collection above.
 // ═══════════════════════════════════════════════════════════════════════════
 
 service cloud.firestore {
@@ -106,6 +119,16 @@ service cloud.firestore {
 
     function isOwner(uid) {
       return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Used by the Prize Win Notifications feature's registration gate
+    // (Lucky Draw joining, Rewards Shop redemption) — a winner/redeemer
+    // always needs a real account to be notified through. Firestore rules
+    // CAN read this directly off the auth token (unlike "is this uid
+    // registered" for some OTHER uid, which rules can't determine at all —
+    // see filterRegisteredUids()'s client-side email-based approximation).
+    function isAnonymousUser() {
+      return isSignedIn() && request.auth.token.firebase.sign_in_provider == 'anonymous';
     }
 
     // Only valid when evaluated inside a match block bound to a single
@@ -234,6 +257,7 @@ service cloud.firestore {
         || (isSignedIn() && resource.data.userId == request.auth.uid);
 
       allow create: if isSignedIn()
+        && !isAnonymousUser()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.status == 'Pending Delivery'
         && request.resource.data.refunded == false
@@ -434,7 +458,26 @@ service cloud.firestore {
     match /lucky_draws/{id} {
       allow read: if isSignedIn();
       allow create: if ownsBooth(request.resource.data.exhibitorId) || isLegacyAdmin();
-      allow update, delete: if ownsBooth(resource.data.exhibitorId) || isLegacyAdmin();
+
+      // Booth owner: full administrative control (edit details, isActive,
+      // setWinner()'s winnerUid write). PLUS a second, narrower path fixed
+      // here: a registered (non-anonymous) visitor JOINING a draw — bounded
+      // to appending exactly their own uid to `participants`, nothing else,
+      // and only while the draw is still open. (This was a pre-existing
+      // gap: before this rule, no visitor could ever actually join a draw
+      // once these rules were deployed — joinLuckyDraw()'s plain visitor
+      // update had no matching allow. Fixed here, not just gated, while
+      // adding the Prize Win Notifications round's registration
+      // requirement — see the visitor Lucky Draw screen's `_joinDraw`.)
+      allow update: if ownsBooth(resource.data.exhibitorId) || isLegacyAdmin()
+        || (isSignedIn()
+            && !isAnonymousUser()
+            && resource.data.get('isActive', true) == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants'])
+            && request.resource.data.participants.size() == resource.data.get('participants', []).size() + 1
+            && request.resource.data.participants[request.resource.data.participants.size() - 1] == request.auth.uid);
+
+      allow delete: if ownsBooth(resource.data.exhibitorId) || isLegacyAdmin();
     }
 
     match /puzzles/{id} {
@@ -472,6 +515,37 @@ service cloud.firestore {
         || (isOwner(uid)
             && myRole() != 'exhibitor'
             && myRole() != 'super_admin');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  NOTIFICATIONS — a visitor's in-app inbox (prize wins, redemption
+    //  confirmations — see FirestoreService._notifyUser and the Prize Win
+    //  Notifications round). Only the notification's own uid may ever read
+    //  or mark it read; `list` is scoped the same way getUserRedemptions()
+    //  is above — an unfiltered query is rejected outright.
+    // ═══════════════════════════════════════════════════════════════════════
+    match /notifications/{id} {
+      allow get: if isOwner(resource.data.uid);
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.read == false;
+      allow update: if isOwner(resource.data.uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  EMAIL LOG — a technical record of the (simulated) email that "would
+    //  have been sent" for a prize win/redemption (see the Prize Win
+    //  Notifications round — this app has no real email backend). No screen
+    //  in this app reads this collection by design; kept only as a
+    //  placeholder a future real email integration could read instead.
+    // ═══════════════════════════════════════════════════════════════════════
+    match /email_log/{id} {
+      allow read: if false;
+      allow create: if isSignedIn() && request.resource.data.toUid == request.auth.uid;
+      allow update, delete: if false;
     }
 
     // Deny everything else by default.

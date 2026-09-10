@@ -7,6 +7,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../shared/widgets/recent_winners_list.dart';
+import '../../shared/widgets/register_required_dialog.dart';
 import 'game_common.dart';
 
 /// SCRATCH CARD — the prize is decided the moment the visitor taps "Play"
@@ -65,6 +67,13 @@ class _ScratchCardScreenState extends State<ScratchCardScreen> {
   Future<void> _play() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+    // Playing now requires a registered account (see the Prize Win
+    // Notifications round) — a winner always needs somewhere real to be
+    // notified. An anonymous visitor is prompted to register instead.
+    if (user.isAnonymous) {
+      showRegisterRequiredDialog(context, action: 'play the scratch card');
+      return;
+    }
     setState(() => _phase = 'playing');
 
     final result = await _fs.playPrizeGame(
@@ -221,6 +230,8 @@ class _ScratchCardScreenState extends State<ScratchCardScreen> {
                                 style: TextStyle(
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.textMedium)),
+                          RecentWinnersList(
+                              boothId: widget.exhibitorId, color: color),
                         ],
                       ),
                     ),
