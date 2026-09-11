@@ -6,6 +6,7 @@ import '../../core/constants/brand_styles.dart';
 import '../../core/models/reward_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/services/storage_service.dart';
+import '../../core/theme/app_palette.dart';
 
 /// Super Admin: create/edit/deactivate/delete rewards, including their
 /// brand logo and voucher image. This is the ONLY place reward metadata
@@ -91,6 +92,7 @@ class _ManageRewardsScreenState extends State<ManageRewardsScreen> {
   }
 
   void _confirmDelete(RewardModel reward) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -106,8 +108,7 @@ class _ManageRewardsScreenState extends State<ManageRewardsScreen> {
               Navigator.pop(context);
               await _fs.deleteReward(reward.id);
             },
-            child:
-                const Text('Delete', style: TextStyle(color: AppColors.danger)),
+            child: Text('Delete', style: TextStyle(color: palette.danger)),
           ),
         ],
       ),
@@ -116,11 +117,15 @@ class _ManageRewardsScreenState extends State<ManageRewardsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Manage Rewards 🎁',
+        title: const Text('Manage Rewards',
             style: TextStyle(fontWeight: FontWeight.w800)),
+        // Fixed "Ink" background — Super Admin screens keep a distinctly
+        // dark app bar in both themes (see super_admin_dashboard_screen.dart).
         backgroundColor: AppColors.textDark,
         foregroundColor: Colors.white,
         actions: [
@@ -157,8 +162,8 @@ class _ManageRewardsScreenState extends State<ManageRewardsScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('No rewards yet.',
-                        style: TextStyle(color: AppColors.textMedium)),
+                    Text('No rewards yet.',
+                        style: TextStyle(color: palette.textMedium)),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
                       onPressed: () => _seedDemoCatalogue(false),
@@ -206,10 +211,12 @@ class _RewardAdminCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = brandStyleFor(reward.brandName);
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -253,12 +260,10 @@ class _RewardAdminCard extends StatelessWidget {
                         fontWeight: FontWeight.w800, fontSize: 14)),
                 Text(
                     '${reward.brandName} · RM${reward.voucherValue} · ${reward.pointsRequired} pts',
-                    style: const TextStyle(
-                        color: AppColors.textMedium, fontSize: 12)),
+                    style: TextStyle(color: palette.textMedium, fontSize: 12)),
                 const SizedBox(height: 4),
                 Text('Stock: ${reward.stock}  ·  ${reward.category}',
-                    style: const TextStyle(
-                        color: AppColors.textMedium, fontSize: 11)),
+                    style: TextStyle(color: palette.textMedium, fontSize: 11)),
                 const SizedBox(height: 6),
                 Row(
                   children: [
@@ -271,8 +276,8 @@ class _RewardAdminCard extends StatelessWidget {
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                             color: reward.isActive
-                                ? AppColors.success
-                                : AppColors.textMedium)),
+                                ? palette.success
+                                : palette.textMedium)),
                   ],
                 ),
               ],
@@ -285,8 +290,8 @@ class _RewardAdminCard extends StatelessWidget {
                 onPressed: onEdit,
               ),
               IconButton(
-                icon: const Icon(Icons.delete_outline,
-                    size: 20, color: AppColors.danger),
+                icon:
+                    Icon(Icons.delete_outline, size: 20, color: palette.danger),
                 onPressed: onDelete,
               ),
             ],
@@ -448,6 +453,7 @@ class _RewardFormDialogState extends State<_RewardFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return AlertDialog(
       title: Text(_isEdit ? 'Edit Reward' : 'New Reward',
           style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -498,13 +504,13 @@ class _RewardFormDialogState extends State<_RewardFormDialog> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Row(
                       children: [
-                        const Icon(Icons.info_outline,
-                            size: 14, color: AppColors.textMedium),
+                        Icon(Icons.info_outline,
+                            size: 14, color: palette.textMedium),
                         const SizedBox(width: 6),
                         Text('Stock: ${widget.existing!.stock} '
                             '(change it from Manage Inventory)',
-                            style: const TextStyle(
-                                fontSize: 11, color: AppColors.textMedium)),
+                            style: TextStyle(
+                                fontSize: 11, color: palette.textMedium)),
                       ],
                     ),
                   ),
@@ -521,9 +527,15 @@ class _RewardFormDialogState extends State<_RewardFormDialog> {
                                 height: 14,
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2))
-                            : const Icon(Icons.image_outlined, size: 16),
-                        label: Text(
-                            _brandImageUrl.isEmpty ? 'Brand Logo' : 'Logo ✓',
+                            : Icon(
+                                _brandImageUrl.isEmpty
+                                    ? Icons.image_outlined
+                                    : Icons.check_circle_rounded,
+                                size: 16,
+                                color: _brandImageUrl.isEmpty
+                                    ? null
+                                    : palette.success),
+                        label: Text('Brand Logo',
                             style: const TextStyle(fontSize: 12)),
                       ),
                     ),
@@ -537,13 +549,17 @@ class _RewardFormDialogState extends State<_RewardFormDialog> {
                                 height: 14,
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2))
-                            : const Icon(Icons.photo_outlined, size: 16),
-                        label: Text(
-                            _rewardImageUrl.isEmpty
-                                ? 'Voucher Image'
-                                : 'Image ✓',
+                            : Icon(
+                                _rewardImageUrl.isEmpty
+                                    ? Icons.photo_outlined
+                                    : Icons.check_circle_rounded,
+                                size: 16,
+                                color: _rewardImageUrl.isEmpty
+                                    ? null
+                                    : palette.success),
+                        label: Text('Voucher Image',
                             style: const TextStyle(fontSize: 12)),
-                      ),
+),
                     ),
                   ],
                 ),

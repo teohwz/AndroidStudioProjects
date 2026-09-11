@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/models/inventory_log_model.dart';
 import '../../core/models/reward_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 /// Super Admin: adjust stock (add/remove/correct) with a reason, and see
 /// every past adjustment for a reward — the audit trail requirement 17
@@ -16,12 +17,16 @@ class ManageInventoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fs = FirestoreService();
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Manage Inventory 📦',
+        title: const Text('Manage Inventory',
             style: TextStyle(fontWeight: FontWeight.w800)),
+        // Fixed "Ink" background — Super Admin screens keep a distinctly
+        // dark app bar in both themes (see super_admin_dashboard_screen.dart).
         backgroundColor: AppColors.textDark,
         foregroundColor: Colors.white,
       ),
@@ -38,9 +43,9 @@ class ManageInventoryScreen extends StatelessWidget {
                 }
                 final rewards = snap.data ?? [];
                 if (rewards.isEmpty) {
-                  return const Center(
+                  return Center(
                       child: Text('No rewards yet.',
-                          style: TextStyle(color: AppColors.textMedium)));
+                          style: TextStyle(color: palette.textMedium)));
                 }
                 return StreamBuilder<int>(
                   stream: fs.getLowStockThreshold(),
@@ -87,19 +92,21 @@ class _ThresholdBarState extends State<_ThresholdBar> {
     return StreamBuilder<int>(
       stream: widget.fs.getLowStockThreshold(),
       builder: (context, snap) {
+        final theme = Theme.of(context);
+        final palette = theme.extension<AppPalette>()!;
         final threshold =
             snap.data ?? FirestoreService.defaultLowStockThreshold;
         if (_ctrl.text.isEmpty) _ctrl.text = '$threshold';
         return Container(
-          color: Colors.white,
+          color: theme.colorScheme.surface,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              const Icon(Icons.tune_rounded, size: 18, color: AppColors.textMedium),
+              Icon(Icons.tune_rounded, size: 18, color: palette.textMedium),
               const SizedBox(width: 8),
-              const Expanded(
-                child: Text('Low-stock threshold (stock ≤ this shows ⚠️)',
-                    style: TextStyle(fontSize: 12, color: AppColors.textMedium)),
+              Expanded(
+                child: Text('Low-stock threshold (stock at or below this counts as low)',
+                    style: TextStyle(fontSize: 12, color: palette.textMedium)),
               ),
               SizedBox(
                 width: 60,
@@ -140,14 +147,14 @@ class _InventoryCard extends StatelessWidget {
   final int threshold;
   final FirestoreService fs;
 
-  Color get _levelColor {
+  Color _levelColor(AppPalette palette) {
     switch (reward.stockLevel(threshold)) {
       case StockLevel.outOfStock:
-        return AppColors.danger;
+        return palette.danger;
       case StockLevel.low:
-        return AppColors.warning;
+        return palette.warning;
       case StockLevel.normal:
-        return AppColors.success;
+        return palette.success;
     }
   }
 
@@ -181,10 +188,13 @@ class _InventoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
+    final levelColor = _levelColor(palette);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -207,12 +217,12 @@ class _InventoryCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _levelColor.withOpacity(0.12),
+                  color: levelColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(_levelLabel,
                     style: TextStyle(
-                        color: _levelColor,
+                        color: levelColor,
                         fontWeight: FontWeight.w700,
                         fontSize: 11)),
               ),
@@ -293,6 +303,7 @@ class _AdjustStockDialogState extends State<_AdjustStockDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return AlertDialog(
       title: Text('Adjust Stock — ${widget.reward.name}',
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
@@ -303,7 +314,7 @@ class _AdjustStockDialogState extends State<_AdjustStockDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Current stock: ${widget.reward.stock}',
-                style: const TextStyle(color: AppColors.textMedium)),
+                style: TextStyle(color: palette.textMedium)),
             const SizedBox(height: 12),
             TextFormField(
               controller: _amount,
@@ -361,6 +372,7 @@ class _InventoryHistorySheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
       minChildSize: 0.4,
@@ -391,9 +403,9 @@ class _InventoryHistorySheet extends StatelessWidget {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (logs.isEmpty) {
-                  return const Center(
+                  return Center(
                       child: Text('No adjustments logged yet.',
-                          style: TextStyle(color: AppColors.textMedium)));
+                          style: TextStyle(color: palette.textMedium)));
                 }
                 return ListView.separated(
                   controller: scrollCtrl,
@@ -410,8 +422,7 @@ class _InventoryHistorySheet extends StatelessWidget {
                           positive
                               ? Icons.arrow_upward_rounded
                               : Icons.arrow_downward_rounded,
-                          color:
-                              positive ? AppColors.success : AppColors.danger,
+                          color: positive ? palette.success : palette.danger,
                           size: 18,
                         ),
                         const SizedBox(width: 8),
@@ -425,15 +436,13 @@ class _InventoryHistorySheet extends StatelessWidget {
                                       fontWeight: FontWeight.w700,
                                       fontSize: 13)),
                               Text(log.reason,
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textMedium)),
+                                  style: TextStyle(
+                                      fontSize: 12, color: palette.textMedium)),
                               Text(
                                   'By ${log.changedByLabel}'
                                   '${log.createdAt != null ? ' · ${log.createdAt!.day}/${log.createdAt!.month}/${log.createdAt!.year}' : ''}',
-                                  style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textMedium)),
+                                  style: TextStyle(
+                                      fontSize: 11, color: palette.textMedium)),
                             ],
                           ),
                         ),

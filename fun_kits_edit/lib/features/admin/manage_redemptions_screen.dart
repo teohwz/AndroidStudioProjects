@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/redemption_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 /// Super Admin: view every redemption, search/filter by user, email,
 /// reward, brand, status, or date, change status, and cancel+refund with a
@@ -67,18 +68,22 @@ class _ManageRedemptionsScreenState extends State<ManageRedemptionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Manage Redemptions 🧾',
+        title: const Text('Manage Redemptions',
             style: TextStyle(fontWeight: FontWeight.w800)),
+        // Fixed "Ink" background — Super Admin screens keep a distinctly
+        // dark app bar in both themes (see super_admin_dashboard_screen.dart).
         backgroundColor: AppColors.textDark,
         foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
           Container(
-            color: Colors.white,
+            color: theme.colorScheme.surface,
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             child: Column(
               children: [
@@ -139,9 +144,9 @@ class _ManageRedemptionsScreenState extends State<ManageRedemptionsScreen> {
                 }
                 final filtered = _applyFilters(snap.data ?? []);
                 if (filtered.isEmpty) {
-                  return const Center(
+                  return Center(
                       child: Text('No redemptions match your filters.',
-                          style: TextStyle(color: AppColors.textMedium)));
+                          style: TextStyle(color: palette.textMedium)));
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.all(16),
@@ -162,17 +167,17 @@ class _ManageRedemptionsScreenState extends State<ManageRedemptionsScreen> {
   }
 }
 
-Color _statusColor(String status) {
+Color _statusColor(String status, AppPalette palette, Color primary) {
   switch (status) {
     case RedemptionStatus.delivered:
-      return AppColors.success;
+      return palette.success;
     case RedemptionStatus.processing:
-      return AppColors.warning;
+      return palette.warning;
     case RedemptionStatus.cancelled:
     case RedemptionStatus.refunded:
-      return AppColors.danger;
+      return palette.danger;
     default:
-      return AppColors.primary;
+      return primary;
   }
 }
 
@@ -183,9 +188,11 @@ class _RedemptionListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _statusColor(r.status);
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
+    final color = _statusColor(r.status, palette, theme.colorScheme.primary);
     return Material(
-      color: Colors.white,
+      color: theme.colorScheme.surface,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -202,11 +209,9 @@ class _RedemptionListTile extends StatelessWidget {
                         style: const TextStyle(
                             fontWeight: FontWeight.w800, fontSize: 13)),
                     Text('${r.brandName} · RM${r.voucherValue} · ${r.pointsSpent} pts',
-                        style: const TextStyle(
-                            color: AppColors.textMedium, fontSize: 11)),
+                        style: TextStyle(color: palette.textMedium, fontSize: 11)),
                     Text(r.deliveryEmail,
-                        style: const TextStyle(
-                            color: AppColors.textMedium, fontSize: 11)),
+                        style: TextStyle(color: palette.textMedium, fontSize: 11)),
                   ],
                 ),
               ),
@@ -298,6 +303,7 @@ class _RedemptionDetailDialogState extends State<_RedemptionDetailDialog> {
   @override
   Widget build(BuildContext context) {
     final r = widget.redemption;
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return AlertDialog(
       title: Text(r.rewardName,
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
@@ -333,22 +339,32 @@ class _RedemptionDetailDialogState extends State<_RedemptionDetailDialog> {
             ),
             const SizedBox(height: 14),
             if (r.refunded)
-              const Text('✅ Already refunded — cannot be refunded again.',
-                  style: TextStyle(
-                      color: AppColors.danger,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12))
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle_rounded,
+                      size: 16, color: palette.danger),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                        'Already refunded — cannot be refunded again.',
+                        style: TextStyle(
+                            color: palette.danger,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12)),
+                  ),
+                ],
+              )
             else
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: _busy ? null : _confirmRefund,
-                  icon: const Icon(Icons.undo_rounded,
-                      size: 16, color: AppColors.danger),
-                  label: const Text('Cancel & Refund',
-                      style: TextStyle(color: AppColors.danger)),
+                  icon: Icon(Icons.undo_rounded, size: 16, color: palette.danger),
+                  label: Text('Cancel & Refund',
+                      style: TextStyle(color: palette.danger)),
                   style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.danger)),
+                      side: BorderSide(color: palette.danger)),
                 ),
               ),
           ],
@@ -374,8 +390,9 @@ class _RedemptionDetailDialogState extends State<_RedemptionDetailDialog> {
             SizedBox(
               width: 100,
               child: Text(label,
-                  style: const TextStyle(
-                      color: AppColors.textMedium, fontSize: 11)),
+                  style: TextStyle(
+                      color: Theme.of(context).extension<AppPalette>()!.textMedium,
+                      fontSize: 11)),
             ),
             Expanded(
               child: Text(value,

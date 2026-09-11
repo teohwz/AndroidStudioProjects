@@ -6,6 +6,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/models/exhibitor_model.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 /// Super Admin manages booth SLOTS and invite codes only — never a booth's
 /// customization or games (that's the owning exhibitor's job, enforced both
@@ -25,6 +26,7 @@ class _ManageBoothsScreenState extends State<ManageBoothsScreen> {
   void _createBoothSlot() {
     final numberCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
+    final palette = Theme.of(context).extension<AppPalette>()!;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -57,7 +59,7 @@ class _ManageBoothsScreenState extends State<ManageBoothsScreen> {
               child: const Text('Cancel')),
           FilledButton(
             style:
-                FilledButton.styleFrom(backgroundColor: AppColors.exhibitorColor),
+                FilledButton.styleFrom(backgroundColor: palette.exhibitorColor),
             onPressed: () async {
               final number = numberCtrl.text.trim();
               if (number.isEmpty) return;
@@ -82,17 +84,23 @@ class _ManageBoothsScreenState extends State<ManageBoothsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Manage Booths 🏪',
+        title: const Text('Manage Booths',
             style: TextStyle(fontWeight: FontWeight.w800)),
+        // Deliberately kept as the fixed "Ink" literal (not palette.textDark,
+        // which flips to near-white in dark mode) — Super Admin screens keep
+        // a distinctly dark app bar in both themes (see
+        // super_admin_dashboard_screen.dart).
         backgroundColor: AppColors.textDark,
         foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createBoothSlot,
-        backgroundColor: AppColors.exhibitorColor,
+        backgroundColor: palette.exhibitorColor,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: const Text('New Booth Slot',
@@ -109,14 +117,14 @@ class _ManageBoothsScreenState extends State<ManageBoothsScreen> {
             return Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Icon(Icons.store_outlined,
-                    size: 64, color: AppColors.textMedium.withOpacity(0.4)),
+                    size: 64, color: palette.textMedium.withOpacity(0.4)),
                 const SizedBox(height: 12),
-                const Text('No booth slots yet.',
+                Text('No booth slots yet.',
                     style:
-                        TextStyle(color: AppColors.textMedium, fontSize: 16)),
+                        TextStyle(color: palette.textMedium, fontSize: 16)),
                 const SizedBox(height: 4),
-                const Text('Tap + to create one and generate an invite code.',
-                    style: TextStyle(color: AppColors.textMedium)),
+                Text('Tap + to create one and generate an invite code.',
+                    style: TextStyle(color: palette.textMedium)),
               ]),
             );
           }
@@ -151,6 +159,9 @@ class _BoothTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    // booth.themeColor is exhibitor-driven, not a design-system color — kept
+    // as-is (same exhibitor-customization exception as the Booth screens).
     final color = booth.themeColor;
     return Container(
       decoration: BoxDecoration(
@@ -176,16 +187,16 @@ class _BoothTile extends StatelessWidget {
                 Text(booth.name,
                     style: const TextStyle(fontWeight: FontWeight.w700)),
                 Text('Booth ${booth.boothNumber}',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textMedium)),
+                    style: TextStyle(
+                        fontSize: 12, color: palette.textMedium)),
                 Container(
                   margin: const EdgeInsets.only(top: 4),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: booth.isClaimed
-                        ? AppColors.success.withOpacity(0.15)
-                        : AppColors.warning.withOpacity(0.15),
+                        ? palette.success.withOpacity(0.15)
+                        : palette.warning.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -194,8 +205,8 @@ class _BoothTile extends StatelessWidget {
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         color: booth.isClaimed
-                            ? AppColors.success
-                            : AppColors.warning),
+                            ? palette.success
+                            : palette.warning),
                   ),
                 ),
               ],
@@ -204,13 +215,13 @@ class _BoothTile extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.vpn_key_rounded, size: 20),
             tooltip: 'Invite codes',
-            color: AppColors.exhibitorColor,
+            color: palette.exhibitorColor,
             onPressed: onInvites,
           ),
           Switch(
             value: booth.isActive,
             onChanged: onToggleActive,
-            activeThumbColor: AppColors.success,
+            activeThumbColor: palette.success,
           ),
         ],
       ),
@@ -262,6 +273,7 @@ class _InviteSheet extends StatelessWidget {
     final code = await fs.generateExhibitorInvite(
         boothId: booth.id, createdByUid: uid);
     if (context.mounted) {
+      final palette = Theme.of(context).extension<AppPalette>()!;
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
@@ -273,7 +285,7 @@ class _InviteSheet extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 20, vertical: 14),
                 decoration: BoxDecoration(
-                  color: AppColors.cardBg,
+                  color: palette.cardBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(code,
@@ -283,11 +295,11 @@ class _InviteSheet extends StatelessWidget {
                         letterSpacing: 2)),
               ),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 'Give this code to the exhibitor. It can only be used once, '
                 'for this booth, and expires in 7 days if unused.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AppColors.textMedium),
+                style: TextStyle(fontSize: 12, color: palette.textMedium),
               ),
             ],
           ),
@@ -303,6 +315,7 @@ class _InviteSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -350,32 +363,32 @@ class _InviteSheet extends StatelessWidget {
                     ),
                   ),
                   if (booth.isClaimed)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 20),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Text(
                         'This booth has already been claimed by an exhibitor — '
                         'no new codes are needed.',
                         style: TextStyle(
-                            fontSize: 12, color: AppColors.textMedium),
+                            fontSize: 12, color: palette.textMedium),
                       ),
                     )
                   else if (hasActiveCode)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 20),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Text(
                         'There is already an active code for this booth — '
                         'it must be used or expire before a new one can be '
                         'generated.',
                         style: TextStyle(
-                            fontSize: 12, color: AppColors.textMedium),
+                            fontSize: 12, color: palette.textMedium),
                       ),
                     ),
                   Expanded(
                     child: invites.isEmpty
-                        ? const Center(
+                        ? Center(
                             child: Text('No invite codes generated yet.',
                                 style:
-                                    TextStyle(color: AppColors.textMedium)))
+                                    TextStyle(color: palette.textMedium)))
                         : ListView.separated(
                             controller: scrollCtrl,
                             padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
@@ -390,15 +403,15 @@ class _InviteSheet extends StatelessWidget {
                               switch (state) {
                                 case _InviteState.active:
                                   label = 'Active';
-                                  color = AppColors.success;
+                                  color = palette.success;
                                   break;
                                 case _InviteState.used:
                                   label = 'Used';
-                                  color = AppColors.textMedium;
+                                  color = palette.textMedium;
                                   break;
                                 case _InviteState.expired:
                                   label = 'Expired';
-                                  color = AppColors.danger;
+                                  color = palette.danger;
                                   break;
                               }
                               final countdown = _expiryCountdownText(inv);
@@ -411,9 +424,9 @@ class _InviteSheet extends StatelessWidget {
                                 subtitle: countdown == null
                                     ? null
                                     : Text(countdown,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             fontSize: 11,
-                                            color: AppColors.textMedium)),
+                                            color: palette.textMedium)),
                                 trailing: Text(
                                   label,
                                   style: TextStyle(

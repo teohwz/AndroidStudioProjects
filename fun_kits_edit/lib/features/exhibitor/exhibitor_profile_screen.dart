@@ -33,28 +33,6 @@ class _ExhibitorProfileScreenState extends State<ExhibitorProfileScreen> {
     if (mounted) setState(() => _checkedInBooths = ids);
   }
 
-  Future<void> _checkIn(ExhibitorModel ex) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    if (_checkedInBooths.contains(ex.id)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Already checked in here!')));
-      return;
-    }
-    final isNew = await _fs.checkInBooth(uid, ex.id);
-    if (mounted) {
-      if (isNew) {
-        setState(() => _checkedInBooths = [..._checkedInBooths, ex.id]);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Row(children: const [
-          Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-          SizedBox(width: 8),
-          Text('Checked in! +1 attempt earned at this booth.'),
-        ])));
-      }
-    }
-  }
-
   @override
   void dispose() { _searchCtrl.dispose(); super.dispose(); }
 
@@ -210,7 +188,6 @@ class _ExhibitorProfileScreenState extends State<ExhibitorProfileScreen> {
                     exhibitor: filtered[i],
                     isCheckedIn:
                     _checkedInBooths.contains(filtered[i].id),
-                    onCheckIn: () => _checkIn(filtered[i]),
                   ),
                 ),
               ),
@@ -227,12 +204,10 @@ class _ExhibitorCard extends StatefulWidget {
   const _ExhibitorCard({
     required this.exhibitor,
     required this.isCheckedIn,
-    required this.onCheckIn,
   });
 
   final ExhibitorModel exhibitor;
   final bool isCheckedIn;
-  final VoidCallback onCheckIn;
 
   @override
   State<_ExhibitorCard> createState() => _ExhibitorCardState();
@@ -364,16 +339,40 @@ class _ExhibitorCardState extends State<_ExhibitorCard> {
                 ),
                 if (_expanded) ...[
                   const SizedBox(height: 10),
-                  Text(ex.description,
-                      style: TextStyle(
-                          color: palette.textMedium, fontSize: 13)),
+                  Text(
+                    ex.description.isNotEmpty
+                        ? ex.description
+                        : 'No description provided.',
+                    style: TextStyle(
+                        color: palette.textMedium,
+                        fontSize: 13,
+                        fontStyle: ex.description.isNotEmpty
+                            ? FontStyle.normal
+                            : FontStyle.italic),
+                  ),
                   const SizedBox(height: 8),
-                  if (ex.contactEmail.isNotEmpty)
-                    _InfoRow(Icons.email_outlined, ex.contactEmail, color),
-                  if (ex.contactPhone.isNotEmpty)
-                    _InfoRow(Icons.phone_outlined, ex.contactPhone, color),
-                  if (ex.website.isNotEmpty)
-                    _InfoRow(Icons.language_outlined, ex.website, color),
+                  _InfoRow(
+                    Icons.email_outlined,
+                    ex.contactEmail.isNotEmpty
+                        ? ex.contactEmail
+                        : 'Not provided',
+                    color,
+                    isPlaceholder: ex.contactEmail.isEmpty,
+                  ),
+                  _InfoRow(
+                    Icons.phone_outlined,
+                    ex.contactPhone.isNotEmpty
+                        ? ex.contactPhone
+                        : 'Not provided',
+                    color,
+                    isPlaceholder: ex.contactPhone.isEmpty,
+                  ),
+                  _InfoRow(
+                    Icons.language_outlined,
+                    ex.website.isNotEmpty ? ex.website : 'Not provided',
+                    color,
+                    isPlaceholder: ex.website.isEmpty,
+                  ),
                   if (ex.tags.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Wrap(
@@ -396,45 +395,31 @@ class _ExhibitorCardState extends State<_ExhibitorCard> {
                           .toList(),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: widget.isCheckedIn
-                        ? Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: palette.success.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.check_circle_rounded,
-                              color: palette.success, size: 18),
-                          const SizedBox(width: 6),
-                          Text('Checked In',
-                              style: TextStyle(
-                                  color: palette.success,
-                                  fontWeight: FontWeight.w700)),
-                        ],
-                      ),
-                    )
-                        : ElevatedButton.icon(
-                      onPressed: widget.onCheckIn,
-                      icon: const Icon(Icons.qr_code_scanner_rounded,
-                          size: 18),
-                      label: const Text('Check In (+1 attempt)',
-                          style: TextStyle(fontSize: 13)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: color,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        padding:
-                        const EdgeInsets.symmetric(vertical: 10),
+                  if (widget.isCheckedIn) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: palette.success.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.check_circle_rounded,
+                                color: palette.success, size: 18),
+                            const SizedBox(width: 6),
+                            Text('Checked In',
+                                style: TextStyle(
+                                    color: palette.success,
+                                    fontWeight: FontWeight.w700)),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ],
             ),
@@ -446,26 +431,37 @@ class _ExhibitorCardState extends State<_ExhibitorCard> {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow(this.icon, this.text, this.color);
+  const _InfoRow(this.icon, this.text, this.color,
+      {this.isPlaceholder = false});
   final IconData icon;
   final String text;
   final Color color;
+  final bool isPlaceholder;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 4),
-    child: Row(
-      children: [
-        Icon(icon, size: 14, color: color),
-        const SizedBox(width: 6),
-        Expanded(
-            child: Text(text,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600))),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    // A placeholder row (field left blank by the exhibitor) is rendered in a
+    // muted, italicized style — same hue, lower opacity — so it visibly
+    // reads as "empty" rather than as real content.
+    final rowColor = isPlaceholder ? color.withOpacity(0.5) : color;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: rowColor),
+          const SizedBox(width: 6),
+          Expanded(
+              child: Text(text,
+                  style: TextStyle(
+                      color: rowColor,
+                      fontSize: 12,
+                      fontStyle:
+                          isPlaceholder ? FontStyle.italic : FontStyle.normal,
+                      fontWeight:
+                          isPlaceholder ? FontWeight.w500 : FontWeight.w600))),
+        ],
+      ),
+    );
+  }
 }
 
 class _BannerPainter extends CustomPainter {

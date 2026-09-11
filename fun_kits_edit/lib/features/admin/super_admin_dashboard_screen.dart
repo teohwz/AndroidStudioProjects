@@ -6,6 +6,7 @@ import '../../core/models/reward_model.dart';
 import '../../core/models/redemption_model.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 import '../../app/routes.dart';
 import 'manage_rewards_screen.dart';
 
@@ -19,12 +20,18 @@ class SuperAdminDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fs = FirestoreService();
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Super Admin 👑',
+        title: const Text('Super Admin',
             style: TextStyle(fontWeight: FontWeight.w800)),
+        // Deliberately kept as the fixed "Ink" literal (not palette.textDark,
+        // which flips to near-white in dark mode) — Super Admin is the
+        // highest-privilege role and keeps a distinctly dark bar in both
+        // themes, same reasoning as Leaderboard's fixed gold-bar exception.
         backgroundColor: AppColors.textDark,
         foregroundColor: Colors.white,
         actions: [
@@ -108,44 +115,44 @@ class SuperAdminDashboardScreen extends StatelessWidget {
                               _StatTile(
                                   label: 'Total Users',
                                   value: '${users.length}',
-                                  emoji: '👥',
-                                  color: AppColors.primary),
+                                  icon: Icons.groups_rounded,
+                                  color: theme.colorScheme.primary),
                               _StatTile(
                                   label: 'Total Rewards',
                                   value: '${rewards.length}',
-                                  emoji: '🎁',
-                                  color: AppColors.exhibitorColor),
+                                  icon: Icons.card_giftcard_rounded,
+                                  color: palette.exhibitorColor),
                               _StatTile(
                                   label: 'Active Rewards',
                                   value: '$activeRewards',
-                                  emoji: '✅',
-                                  color: AppColors.success),
+                                  icon: Icons.check_circle_rounded,
+                                  color: palette.success),
                               _StatTile(
                                   label: 'Total Redemptions',
                                   value: '${redemptions.length}',
-                                  emoji: '🧾',
-                                  color: AppColors.quizColor),
+                                  icon: Icons.receipt_long_rounded,
+                                  color: palette.quizColor),
                               _StatTile(
                                   label: 'Pending Deliveries',
                                   value: '$pendingDeliveries',
-                                  emoji: '📦',
-                                  color: AppColors.warning),
+                                  icon: Icons.local_shipping_rounded,
+                                  color: palette.warning),
                               _StatTile(
                                   label: 'Points Redeemed',
                                   value: '$totalPointsRedeemed',
-                                  emoji: '💰',
-                                  color: AppColors.leaderboardColor,
+                                  icon: Icons.paid_rounded,
+                                  color: palette.gold,
                                   dark: true),
                               _StatTile(
                                   label: 'Low Stock',
                                   value: '$lowStock',
-                                  emoji: '⚠️',
-                                  color: AppColors.warning),
+                                  icon: Icons.warning_amber_rounded,
+                                  color: palette.warning),
                               _StatTile(
                                   label: 'Out of Stock',
                                   value: '$outOfStock',
-                                  emoji: '🚫',
-                                  color: AppColors.danger),
+                                  icon: Icons.remove_shopping_cart_rounded,
+                                  color: palette.danger),
                             ],
                           ),
                           const SizedBox(height: 24),
@@ -156,7 +163,7 @@ class SuperAdminDashboardScreen extends StatelessWidget {
                           _QuickAction(
                             icon: Icons.add_box_rounded,
                             label: 'Add Reward',
-                            color: AppColors.success,
+                            color: palette.success,
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -167,35 +174,35 @@ class SuperAdminDashboardScreen extends StatelessWidget {
                           _QuickAction(
                             icon: Icons.card_giftcard_rounded,
                             label: 'Manage Rewards',
-                            color: AppColors.primary,
+                            color: theme.colorScheme.primary,
                             onTap: () => Navigator.pushNamed(
                                 context, AppRoutes.manageRewards),
                           ),
                           _QuickAction(
                             icon: Icons.inventory_2_rounded,
                             label: 'Manage Inventory',
-                            color: AppColors.exhibitorColor,
+                            color: palette.exhibitorColor,
                             onTap: () => Navigator.pushNamed(
                                 context, AppRoutes.manageInventory),
                           ),
                           _QuickAction(
                             icon: Icons.receipt_long_rounded,
                             label: 'View Redemptions',
-                            color: AppColors.quizColor,
+                            color: palette.quizColor,
                             onTap: () => Navigator.pushNamed(
                                 context, AppRoutes.manageRedemptions),
                           ),
                           _QuickAction(
                             icon: Icons.people_alt_rounded,
                             label: 'Manage Users',
-                            color: AppColors.luckyDrawColor,
+                            color: palette.luckyDrawColor,
                             onTap: () => Navigator.pushNamed(
                                 context, AppRoutes.manageUsers),
                           ),
                           _QuickAction(
                             icon: Icons.store_rounded,
                             label: 'Manage Booths',
-                            color: AppColors.exhibitorColor,
+                            color: palette.exhibitorColor,
                             onTap: () => Navigator.pushNamed(
                                 context, AppRoutes.manageBooths),
                           ),
@@ -217,14 +224,14 @@ class _StatTile extends StatelessWidget {
   const _StatTile({
     required this.label,
     required this.value,
-    required this.emoji,
+    required this.icon,
     required this.color,
     this.dark = false,
   });
 
   final String label;
   final String value;
-  final String emoji;
+  final IconData icon;
   final Color color;
   final bool dark;
 
@@ -241,7 +248,7 @@ class _StatTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 18)),
+          Icon(icon, size: 18, color: color),
           const SizedBox(height: 4),
           Text(value,
               style: TextStyle(
@@ -269,10 +276,12 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -295,8 +304,7 @@ class _QuickAction extends StatelessWidget {
                 Text(label,
                     style: const TextStyle(fontWeight: FontWeight.w700)),
                 const Spacer(),
-                const Icon(Icons.chevron_right_rounded,
-                    color: AppColors.textMedium),
+                Icon(Icons.chevron_right_rounded, color: palette.textMedium),
               ],
             ),
           ),

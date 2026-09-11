@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/redemption_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 // Deliberately excludes 'exhibitor': an exhibitor account is only ever
 // created via invite-code redemption (which also assigns a boothId) — this
@@ -70,19 +71,25 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   @override
   Widget build(BuildContext context) {
     final myUid = FirebaseAuth.instance.currentUser?.uid;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Manage Users 👥',
+        title: const Text('Manage Users',
             style: TextStyle(fontWeight: FontWeight.w800)),
+        // Deliberately kept as the fixed "Ink" literal (not palette.textDark,
+        // which flips to near-white in dark mode) — Super Admin screens keep
+        // a distinctly dark app bar in both themes (see
+        // super_admin_dashboard_screen.dart).
         backgroundColor: AppColors.textDark,
         foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
           Container(
-            color: Colors.white,
+            color: theme.colorScheme.surface,
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             child: TextField(
               controller: _searchCtrl,
@@ -106,9 +113,9 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                 }
                 final filtered = _applyFilter(snap.data ?? []);
                 if (filtered.isEmpty) {
-                  return const Center(
+                  return Center(
                       child: Text('No users match your search.',
-                          style: TextStyle(color: AppColors.textMedium)));
+                          style: TextStyle(color: palette.textMedium)));
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.all(16),
@@ -141,6 +148,8 @@ class _UserListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     final role = (user['role'] as String?) ?? 'visitor';
     final status = (user['accountStatus'] as String?) ?? 'active';
     final banned = status == 'banned';
@@ -149,7 +158,7 @@ class _UserListTile extends StatelessWidget {
     final email = (user['email'] as String?)?.trim();
 
     return Material(
-      color: Colors.white,
+      color: theme.colorScheme.surface,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -170,14 +179,14 @@ class _UserListTile extends StatelessWidget {
                           fontWeight: FontWeight.w800, fontSize: 13),
                     ),
                     Text(email != null && email.isNotEmpty ? email : 'No email',
-                        style: const TextStyle(
-                            color: AppColors.textMedium, fontSize: 11)),
+                        style: TextStyle(
+                            color: palette.textMedium, fontSize: 11)),
                     // Exhibitor and Super Admin accounts never have points —
                     // showing "0 pts" here would suggest otherwise.
                     if (role != 'exhibitor' && role != 'super_admin')
                       Text('$points pts',
-                          style: const TextStyle(
-                              color: AppColors.textMedium, fontSize: 11)),
+                          style: TextStyle(
+                              color: palette.textMedium, fontSize: 11)),
                   ],
                 ),
               ),
@@ -187,18 +196,18 @@ class _UserListTile extends StatelessWidget {
                   _Badge(
                     label: _roleLabel(role),
                     color: role == 'super_admin'
-                        ? AppColors.accent
+                        ? palette.gold
                         : role == 'admin'
-                            ? AppColors.primary
+                            ? theme.colorScheme.primary
                             : role == 'exhibitor'
-                                ? AppColors.exhibitorColor
-                                : AppColors.textMedium,
+                                ? palette.exhibitorColor
+                                : palette.textMedium,
                   ),
                   const SizedBox(height: 4),
                   if (banned)
-                    const _Badge(label: 'Banned', color: AppColors.danger)
+                    _Badge(label: 'Banned', color: palette.danger)
                   else if (isSelf)
-                    const _Badge(label: 'You', color: AppColors.success),
+                    _Badge(label: 'You', color: palette.success),
                 ],
               ),
             ],
@@ -277,6 +286,7 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
 
   Future<void> _toggleBan(bool currentlyBanned) async {
     final action = currentlyBanned ? 'unban' : 'ban';
+    final palette = Theme.of(context).extension<AppPalette>()!;
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -292,7 +302,7 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
               onPressed: () => Navigator.pop(context, true),
               style: FilledButton.styleFrom(
                   backgroundColor:
-                      currentlyBanned ? AppColors.success : AppColors.danger),
+                      currentlyBanned ? palette.success : palette.danger),
               child: Text(currentlyBanned ? 'Unban' : 'Ban')),
         ],
       ),
@@ -311,10 +321,18 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
     final newRole = _role;
     final oldRole = (widget.user['role'] as String?) ?? 'visitor';
     if (newRole == oldRole) return;
+    final palette = Theme.of(context).extension<AppPalette>()!;
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('⚠️ Highly privileged action'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.warning_amber_rounded, color: palette.warning),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('Highly privileged action')),
+          ],
+        ),
         content: Text(
           newRole == 'super_admin'
               ? 'You are about to grant SUPER ADMIN — the highest access '
@@ -329,7 +347,7 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
               child: const Text('Cancel')),
           FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+              style: FilledButton.styleFrom(backgroundColor: palette.danger),
               child: const Text('Confirm')),
         ],
       ),
@@ -349,6 +367,7 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     final u = widget.user;
     final status = (u['accountStatus'] as String?) ?? 'active';
     final banned = status == 'banned';
@@ -403,14 +422,14 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
                     onPressed: _busy ? null : () => _adjustPoints(1),
                     icon: const Icon(Icons.add_rounded),
                     style: IconButton.styleFrom(
-                        backgroundColor: AppColors.success),
+                        backgroundColor: palette.success),
                   ),
                   const SizedBox(width: 4),
                   IconButton.filled(
                     onPressed: _busy ? null : () => _adjustPoints(-1),
                     icon: const Icon(Icons.remove_rounded),
                     style: IconButton.styleFrom(
-                        backgroundColor: AppColors.danger),
+                        backgroundColor: palette.danger),
                   ),
                 ],
               ),
@@ -426,13 +445,13 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
                 icon: Icon(
                     banned ? Icons.lock_open_rounded : Icons.block_rounded,
                     size: 16,
-                    color: banned ? AppColors.success : AppColors.danger),
+                    color: banned ? palette.success : palette.danger),
                 label: Text(banned ? 'Unban User' : 'Ban User',
                     style: TextStyle(
-                        color: banned ? AppColors.success : AppColors.danger)),
+                        color: banned ? palette.success : palette.danger)),
                 style: OutlinedButton.styleFrom(
                     side: BorderSide(
-                        color: banned ? AppColors.success : AppColors.danger)),
+                        color: banned ? palette.success : palette.danger)),
               ),
             ),
             const SizedBox(height: 16),
@@ -451,24 +470,24 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppColors.exhibitorColor.withOpacity(0.1),
+                  color: palette.exhibitorColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                      color: AppColors.exhibitorColor.withOpacity(0.4)),
+                      color: palette.exhibitorColor.withOpacity(0.4)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.storefront_rounded,
-                        size: 16, color: AppColors.exhibitorColor),
+                    Icon(Icons.storefront_rounded,
+                        size: 16, color: palette.exhibitorColor),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         (u['boothId'] as String?)?.isNotEmpty == true
                             ? 'Exhibitor — booth "${u['boothId']}"'
                             : 'Exhibitor',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.exhibitorColor),
+                            color: palette.exhibitorColor),
                       ),
                     ),
                   ],
@@ -511,9 +530,9 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
                   );
                 }
                 if (list.isEmpty) {
-                  return const Text('No redemptions yet.',
+                  return Text('No redemptions yet.',
                       style: TextStyle(
-                          color: AppColors.textMedium, fontSize: 12));
+                          color: palette.textMedium, fontSize: 12));
                 }
                 return Column(
                   children: list
@@ -529,9 +548,9 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
                                       overflow: TextOverflow.ellipsis),
                                 ),
                                 Text(r.statusLabel,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontSize: 10,
-                                        color: AppColors.textMedium)),
+                                        color: palette.textMedium)),
                               ],
                             ),
                           ))
@@ -558,8 +577,9 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
             SizedBox(
               width: 90,
               child: Text(label,
-                  style: const TextStyle(
-                      color: AppColors.textMedium, fontSize: 11)),
+                  style: TextStyle(
+                      color: Theme.of(context).extension<AppPalette>()!.textMedium,
+                      fontSize: 11)),
             ),
             Expanded(
               child: Text(value,
