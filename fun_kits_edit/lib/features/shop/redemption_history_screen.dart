@@ -1,9 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/models/redemption_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 /// A visitor's own past redemptions — reachable from the Shop's app bar.
 class RedemptionHistoryScreen extends StatelessWidget {
@@ -13,13 +13,14 @@ class RedemptionHistoryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final fs = FirestoreService();
     final uid = FirebaseAuth.instance.currentUser?.uid;
+    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('My Redemptions 🧾',
+        title: const Text('My Redemptions',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
       ),
       body: uid == null
@@ -32,16 +33,20 @@ class RedemptionHistoryScreen extends StatelessWidget {
                 }
                 final redemptions = snap.data ?? [];
                 if (redemptions.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Padding(
-                      padding: EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(24),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('🧾', style: TextStyle(fontSize: 56)),
-                          SizedBox(height: 12),
+                          Icon(Icons.receipt_long_rounded,
+                              size: 56, color: theme.colorScheme.primary),
+                          const SizedBox(height: 12),
                           Text("You haven't redeemed anything yet.",
-                              style: TextStyle(color: AppColors.textMedium)),
+                              style: TextStyle(
+                                  color: theme
+                                      .extension<AppPalette>()!
+                                      .textMedium)),
                         ],
                       ),
                     ),
@@ -63,26 +68,29 @@ class _RedemptionCard extends StatelessWidget {
   const _RedemptionCard({required this.r});
   final RedemptionModel r;
 
-  Color get _statusColor {
+  Color _statusColor(AppPalette palette, Color primary) {
     switch (r.status) {
       case RedemptionStatus.delivered:
-        return AppColors.success;
+        return palette.success;
       case RedemptionStatus.processing:
-        return AppColors.warning;
+        return palette.warning;
       case RedemptionStatus.cancelled:
       case RedemptionStatus.refunded:
-        return AppColors.danger;
+        return palette.danger;
       default:
-        return AppColors.primary;
+        return primary;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
+    final statusColor = _statusColor(palette, theme.colorScheme.primary);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -105,12 +113,12 @@ class _RedemptionCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _statusColor.withOpacity(0.12),
+                  color: statusColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(r.statusLabel,
                     style: TextStyle(
-                        color: _statusColor,
+                        color: statusColor,
                         fontWeight: FontWeight.w700,
                         fontSize: 11)),
               ),
@@ -118,20 +126,20 @@ class _RedemptionCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text('${r.brandName} · RM${r.voucherValue} · ${r.pointsSpent} pts',
-              style: const TextStyle(color: AppColors.textMedium, fontSize: 12)),
+              style: TextStyle(color: palette.textMedium, fontSize: 12)),
           const SizedBox(height: 4),
           Text('To: ${r.deliveryEmail}',
-              style: const TextStyle(color: AppColors.textMedium, fontSize: 12)),
+              style: TextStyle(color: palette.textMedium, fontSize: 12)),
           if (r.createdAt != null) ...[
             const SizedBox(height: 4),
             Text(
               '${r.createdAt!.day}/${r.createdAt!.month}/${r.createdAt!.year}',
-              style: const TextStyle(color: AppColors.textMedium, fontSize: 11),
+              style: TextStyle(color: palette.textMedium, fontSize: 11),
             ),
           ],
           const SizedBox(height: 4),
           Text('ID: ${r.id.length > 8 ? r.id.substring(0, 8).toUpperCase() : r.id.toUpperCase()}',
-              style: const TextStyle(color: AppColors.textMedium, fontSize: 10)),
+              style: TextStyle(color: palette.textMedium, fontSize: 10)),
         ],
       ),
     );

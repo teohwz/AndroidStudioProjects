@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
 import 'game_common.dart';
@@ -121,7 +122,9 @@ class _GuessNumberScreenState extends State<GuessNumberScreen> {
     }
     showGameResultDialog(
       context,
-      emoji: won ? '🎯' : '😅',
+      icon: won
+          ? Icons.emoji_events_rounded
+          : Icons.sentiment_dissatisfied_rounded,
       title: won ? 'You Got It!' : 'Out of Guesses!',
       message: won
           ? 'You guessed it in ${_guesses.length} ${_guesses.length == 1 ? "try" : "tries"} '
@@ -140,7 +143,7 @@ class _GuessNumberScreenState extends State<GuessNumberScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('💡', style: TextStyle(fontSize: 40)),
+            Icon(Icons.lightbulb_rounded, size: 40, color: widget.accentColor),
             const SizedBox(height: 8),
             Text(_config!.hint, textAlign: TextAlign.center),
           ],
@@ -156,10 +159,12 @@ class _GuessNumberScreenState extends State<GuessNumberScreen> {
   @override
   Widget build(BuildContext context) {
     final color = widget.accentColor;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     final config = _config;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: gameAppBar(widget.title, color,
           actions: [
             if (!_loading && config != null && config.hasHint)
@@ -178,13 +183,13 @@ class _GuessNumberScreenState extends State<GuessNumberScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('🔢', style: TextStyle(fontSize: 64)),
+                      Icon(Icons.pin_rounded, size: 64, color: color),
                       const SizedBox(height: 12),
-                      const Text('This booth hasn\'t set this game up yet.',
+                      Text('This booth hasn\'t set this game up yet.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: AppColors.textMedium)),
+                              color: palette.textMedium)),
                     ],
                   ),
                 )
@@ -195,15 +200,15 @@ class _GuessNumberScreenState extends State<GuessNumberScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text('🔢', style: TextStyle(fontSize: 64)),
+                              Icon(Icons.pin_rounded, size: 64, color: color),
                               const SizedBox(height: 12),
                               Text(
                                   'Guess a number between ${config.minValue} and '
                                   '${config.maxValue}!\nYou get ${GuessNumberConfig.maxAttempts} tries.',
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontWeight: FontWeight.w700,
-                                      color: AppColors.textMedium)),
+                                      color: palette.textMedium)),
                               const SizedBox(height: 20),
                               ElevatedButton(
                                 onPressed: _start,
@@ -238,9 +243,9 @@ class _GuessNumberScreenState extends State<GuessNumberScreen> {
                                           fontWeight: FontWeight.w800, color: color)),
                                 ),
                                 Text('Range: ${config.minValue}–${config.maxValue}',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontWeight: FontWeight.w700,
-                                        color: AppColors.textMedium)),
+                                        color: palette.textMedium)),
                               ],
                             ),
                             const SizedBox(height: 16),
@@ -281,13 +286,18 @@ class _GuessNumberScreenState extends State<GuessNumberScreen> {
                                 itemBuilder: (_, i) {
                                   final g = _guesses[i];
                                   final isCorrect = g.result == 'correct';
-                                  final label = isCorrect
-                                      ? 'Correct! 🎯'
+                                  final labelIcon = isCorrect
+                                      ? Icons.emoji_events_rounded
                                       : g.result == 'higher'
-                                          ? 'Go Higher ⬆️'
-                                          : 'Go Lower ⬇️';
+                                          ? Icons.arrow_upward_rounded
+                                          : Icons.arrow_downward_rounded;
+                                  final label = isCorrect
+                                      ? 'Correct!'
+                                      : g.result == 'higher'
+                                          ? 'Go Higher'
+                                          : 'Go Lower';
                                   final tileColor = isCorrect
-                                      ? AppColors.success
+                                      ? palette.success
                                       : color;
                                   return Container(
                                     padding: const EdgeInsets.symmetric(
@@ -306,10 +316,18 @@ class _GuessNumberScreenState extends State<GuessNumberScreen> {
                                             style: const TextStyle(
                                                 fontWeight: FontWeight.w800,
                                                 fontSize: 16)),
-                                        Text(label,
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                color: tileColor)),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(labelIcon,
+                                                size: 16, color: tileColor),
+                                            const SizedBox(width: 4),
+                                            Text(label,
+                                                style: TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    color: tileColor)),
+                                          ],
+                                        ),
                                       ],
                                     ),
                                   );

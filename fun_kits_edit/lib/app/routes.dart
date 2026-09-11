@@ -7,6 +7,7 @@ import '../features/auth/role_choice_screen.dart';
 import '../features/auth/visitor_register_screen.dart';
 import '../features/auth/visitor_login_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/home/profile_screen.dart';
 import '../features/exhibitor/exhibitor_profile_screen.dart';
 import '../features/lucky_draw/lucky_draw_screen.dart';
 import '../features/quiz/quiz_screen.dart';
@@ -36,6 +37,11 @@ class AppRoutes {
   static const String register = '/register';
 
   static const String home = '/home';
+  // New Profile tab (UI redesign Phase 2) — houses the visitor's
+  // Level/Badge/avatar-editing panel and the account menu (Switch Role/
+  // Register/Logout) that used to live in Home's app bar. Pushed from
+  // Home's bottom nav, same pattern as leaderboard/shop below.
+  static const String profile = '/profile';
   static const String exhibitor = '/exhibitor';
   static const String luckyDraw = '/lucky-draw';
   static const String quiz = '/quiz';
@@ -93,6 +99,7 @@ class AppRoutes {
         login: (_) => const LoginScreen(),
         register: (_) => const ExhibitorRegisterScreen(),
         home: (_) => const HomeScreen(),
+        profile: (_) => const ProfileScreen(),
         exhibitor: (_) => const ExhibitorProfileScreen(),
         luckyDraw: (_) => const LuckyDrawScreen(),
         quiz: (_) => const QuizScreen(),

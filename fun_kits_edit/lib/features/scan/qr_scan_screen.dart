@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/models/exhibitor_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../booth/booth_screen.dart';
@@ -137,12 +136,13 @@ class _QrScanScreenState extends State<QrScanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text('Scan Booth QR',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -242,7 +242,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
                       const SizedBox(width: 8),
                       Container(
                         decoration: BoxDecoration(
-                          color: AppColors.primary,
+                          color: theme.colorScheme.primary,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: IconButton(

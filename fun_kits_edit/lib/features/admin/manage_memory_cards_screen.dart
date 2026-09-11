@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/services/storage_service.dart';
+import '../../core/theme/app_palette.dart';
 import '../../shared/widgets/fun_button.dart';
 
 /// Exhibitor-scoped — always edits [boothId]'s (the caller's own booth)
@@ -85,18 +85,28 @@ class _ManageMemoryCardsScreenState extends State<ManageMemoryCardsScreen> {
     );
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Memory Cards saved! 🃏')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+          SizedBox(width: 8),
+          Text('Memory Cards saved!'),
+        ],
+      ),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Memory Cards 🃏',
+        title: const Text('Memory Cards',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.exhibitorColor,
+        backgroundColor: palette.exhibitorColor,
         foregroundColor: Colors.white,
       ),
       body: _loading
@@ -104,12 +114,12 @@ class _ManageMemoryCardsScreenState extends State<ManageMemoryCardsScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
               children: [
-                const Text(
+                Text(
                   'Visitors flip tiles to find matching pairs of YOUR '
                   'images — a fun way to get your products or branding in '
                   'front of them. Points reward is set on the Game '
                   'Settings screen.',
-                  style: TextStyle(color: AppColors.textMedium, fontSize: 12),
+                  style: TextStyle(color: palette.textMedium, fontSize: 12),
                 ),
                 const SizedBox(height: 16),
                 SegmentedButton<int>(
@@ -139,9 +149,9 @@ class _ManageMemoryCardsScreenState extends State<ManageMemoryCardsScreen> {
                       borderRadius: BorderRadius.circular(14),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: theme.colorScheme.surface,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.cardBg, width: 1.5),
+                          border: Border.all(color: palette.cardBg, width: 1.5),
                           image: url.isNotEmpty
                               ? DecorationImage(
                                   image: NetworkImage(url), fit: BoxFit.cover)
@@ -154,15 +164,13 @@ class _ManageMemoryCardsScreenState extends State<ManageMemoryCardsScreen> {
                                 ? Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(
-                                          Icons.add_photo_alternate_rounded,
-                                          color: AppColors.textMedium,
-                                          size: 20),
+                                      Icon(Icons.add_photo_alternate_rounded,
+                                          color: palette.textMedium, size: 20),
                                       const SizedBox(height: 2),
                                       Text('Pair ${i + 1}',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               fontSize: 10,
-                                              color: AppColors.textMedium)),
+                                              color: palette.textMedium)),
                                     ],
                                   )
                                 : null,
@@ -181,9 +189,9 @@ class _ManageMemoryCardsScreenState extends State<ManageMemoryCardsScreen> {
                   label: 'Save Memory Cards',
                   isLoading: _saving,
                   onPressed: _save,
-                  gradient: const LinearGradient(colors: [
-                    AppColors.exhibitorColor,
-                    Color(0xFF6EE7A8),
+                  gradient: LinearGradient(colors: [
+                    palette.exhibitorColor,
+                    const Color(0xFF6EE7A8),
                   ]),
                 ),
               ),

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 import '../../shared/widgets/fun_button.dart';
 import 'prize_segment_editor.dart';
 
@@ -51,18 +51,28 @@ class _ManageSpinWheelScreenState extends State<ManageSpinWheelScreen> {
     );
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Spin Wheel saved! 🎡')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+          SizedBox(width: 8),
+          Text('Spin Wheel saved!'),
+        ],
+      ),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Spin Wheel 🎡',
+        title: const Text('Spin Wheel',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.spinWheelColor,
+        backgroundColor: palette.spinWheelColor,
         foregroundColor: Colors.white,
       ),
       body: _loading
@@ -70,17 +80,17 @@ class _ManageSpinWheelScreenState extends State<ManageSpinWheelScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
               children: [
-                const Text(
+                Text(
                   'Visitors spin to win one of the prizes below — the wheel '
                   'is themed automatically using your booth\'s colors and '
                   'logo. Each prize can be a flat points award or a '
                   'limited-stock physical item, with its own win chance.',
-                  style: TextStyle(color: AppColors.textMedium, fontSize: 12),
+                  style: TextStyle(color: palette.textMedium, fontSize: 12),
                 ),
                 const SizedBox(height: 16),
                 PrizeSegmentList(
                   segments: _segments,
-                  accentColor: AppColors.spinWheelColor,
+                  accentColor: palette.spinWheelColor,
                   onChanged: (s) => setState(() => _segments = s),
                 ),
               ],
@@ -94,9 +104,9 @@ class _ManageSpinWheelScreenState extends State<ManageSpinWheelScreen> {
                   label: 'Save Spin Wheel',
                   isLoading: _saving,
                   onPressed: _save,
-                  gradient: const LinearGradient(colors: [
-                    AppColors.spinWheelColor,
-                    Color(0xFFFF8FB1),
+                  gradient: LinearGradient(colors: [
+                    palette.spinWheelColor,
+                    const Color(0xFFFF8FB1),
                   ]),
                 ),
               ),

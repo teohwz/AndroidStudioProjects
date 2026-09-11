@@ -2,9 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/constants/game_types.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 /// An exhibitor's booth analytics — total participants, game popularity,
 /// and a day-by-day participation/points trend — aggregated client-side
@@ -19,13 +19,15 @@ class ExhibitorAnalyticsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fs = FirestoreService();
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Analytics 📈',
+        title: const Text('Analytics',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.exhibitorColor,
+        backgroundColor: palette.exhibitorColor,
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
@@ -36,21 +38,22 @@ class ExhibitorAnalyticsScreen extends StatelessWidget {
           }
           final sessions = snap.data ?? [];
           if (sessions.isEmpty) {
-            return const Center(
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(24),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('📈', style: TextStyle(fontSize: 56)),
-                    SizedBox(height: 12),
+                    Icon(Icons.bar_chart_rounded,
+                        size: 56, color: palette.textMedium),
+                    const SizedBox(height: 12),
                     Text('No plays at this booth yet.',
-                        style: TextStyle(color: AppColors.textMedium)),
-                    SizedBox(height: 4),
+                        style: TextStyle(color: palette.textMedium)),
+                    const SizedBox(height: 4),
                     Text(
                         'Once visitors scan in and play, stats will show up here.',
-                        style: TextStyle(
-                            color: AppColors.textMedium, fontSize: 12)),
+                        style:
+                            TextStyle(color: palette.textMedium, fontSize: 12)),
                   ],
                 ),
               ),
@@ -104,19 +107,19 @@ class ExhibitorAnalyticsScreen extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _StatCard(
-                        emoji: '🙋',
+                        icon: Icons.groups_rounded,
                         label: 'Total Participants',
                         value: '${uniqueParticipants.length}',
-                        color: AppColors.exhibitorColor,
+                        color: palette.exhibitorColor,
                       ),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: _StatCard(
-                        emoji: '🎮',
+                        icon: Icons.sports_esports_rounded,
                         label: 'Total Plays',
                         value: '${sessions.length}',
-                        color: AppColors.primary,
+                        color: theme.colorScheme.primary,
                       ),
                     ),
                   ],
@@ -128,9 +131,13 @@ class ExhibitorAnalyticsScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.fromLTRB(12, 20, 20, 8),
-                  decoration: _cardDecoration(),
+                  decoration: _cardDecoration(theme),
                   height: 220,
-                  child: _PopularityChart(games: popularGames, byGame: byGame),
+                  child: _PopularityChart(
+                    games: popularGames,
+                    byGame: byGame,
+                    color: palette.exhibitorColor,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 const Text('Daily Participation',
@@ -139,12 +146,12 @@ class ExhibitorAnalyticsScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.fromLTRB(12, 20, 20, 8),
-                  decoration: _cardDecoration(),
+                  decoration: _cardDecoration(theme),
                   height: 200,
                   child: _DailyBarChart(
                     dayKeys: dayKeys,
                     byDay: byDay,
-                    color: AppColors.exhibitorColor,
+                    color: palette.exhibitorColor,
                     valueOf: (agg) => agg.plays.toDouble(),
                   ),
                 ),
@@ -155,12 +162,12 @@ class ExhibitorAnalyticsScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.fromLTRB(12, 20, 20, 8),
-                  decoration: _cardDecoration(),
+                  decoration: _cardDecoration(theme),
                   height: 200,
                   child: _DailyBarChart(
                     dayKeys: dayKeys,
                     byDay: byDay,
-                    color: AppColors.accent,
+                    color: palette.gold,
                     valueOf: (agg) => agg.points.toDouble(),
                   ),
                 ),
@@ -172,8 +179,8 @@ class ExhibitorAnalyticsScreen extends StatelessWidget {
     );
   }
 
-  BoxDecoration _cardDecoration() => BoxDecoration(
-        color: Colors.white,
+  BoxDecoration _cardDecoration(ThemeData theme) => BoxDecoration(
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -194,11 +201,11 @@ class _DayAgg {
 
 class _StatCard extends StatelessWidget {
   const _StatCard(
-      {required this.emoji,
+      {required this.icon,
       required this.label,
       required this.value,
       required this.color});
-  final String emoji;
+  final IconData icon;
   final String label;
   final String value;
   final Color color;
@@ -215,7 +222,7 @@ class _StatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 24)),
+          Icon(icon, size: 24, color: color),
           const SizedBox(height: 8),
           Text(label,
               style: TextStyle(color: color.withOpacity(0.8), fontSize: 11)),
@@ -230,16 +237,19 @@ class _StatCard extends StatelessWidget {
 }
 
 class _PopularityChart extends StatelessWidget {
-  const _PopularityChart({required this.games, required this.byGame});
+  const _PopularityChart(
+      {required this.games, required this.byGame, required this.color});
   final List<GameTypeDef> games;
   final Map<String, int> byGame;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     if (games.isEmpty) {
-      return const Center(
+      return Center(
           child: Text('No plays yet',
-              style: TextStyle(color: AppColors.textMedium)));
+              style: TextStyle(
+                  color: Theme.of(context).extension<AppPalette>()!.textMedium)));
     }
     final maxCount =
         games.map((g) => byGame[g.key]!).fold<int>(0, (a, b) => b > a ? b : a);
@@ -267,8 +277,7 @@ class _PopularityChart extends StatelessWidget {
                 if (i < 0 || i >= games.length) return const SizedBox.shrink();
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(games[i].emoji,
-                      style: const TextStyle(fontSize: 16)),
+                  child: Icon(games[i].icon, size: 16, color: color),
                 );
               },
             ),
@@ -279,7 +288,7 @@ class _PopularityChart extends StatelessWidget {
             BarChartGroupData(x: i, barRods: [
               BarChartRodData(
                 toY: byGame[games[i].key]!.toDouble(),
-                color: AppColors.exhibitorColor,
+                color: color,
                 width: 22,
                 borderRadius: BorderRadius.circular(6),
               ),
@@ -305,9 +314,10 @@ class _DailyBarChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (dayKeys.isEmpty) {
-      return const Center(
+      return Center(
           child: Text('No data yet',
-              style: TextStyle(color: AppColors.textMedium)));
+              style: TextStyle(
+                  color: Theme.of(context).extension<AppPalette>()!.textMedium)));
     }
     final values = dayKeys.map((k) => valueOf(byDay[k]!)).toList();
     final maxVal = values.fold<double>(0, (a, b) => b > a ? b : a);
@@ -339,8 +349,11 @@ class _DailyBarChart extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text('${agg.day}/${agg.month}',
-                      style: const TextStyle(
-                          fontSize: 10, color: AppColors.textMedium)),
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: Theme.of(context)
+                              .extension<AppPalette>()!
+                              .textMedium)),
                 );
               },
             ),

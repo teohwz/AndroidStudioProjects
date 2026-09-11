@@ -2,10 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/models/quiz_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../../shared/widgets/fun_button.dart';
+import '../../shared/widgets/icon_badge.dart';
 
 class QuizScreen extends StatefulWidget {
   const QuizScreen({super.key, this.initialQuiz, this.exhibitorId});
@@ -168,12 +169,12 @@ class _QuizScreenState extends State<QuizScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(widget.initialQuiz?.title ?? 'Quiz & Trivia 🧠',
-            style: const TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.quizColor,
+        title: Text(widget.initialQuiz?.title ?? 'Quiz & Trivia'),
+        backgroundColor: palette.quizColor,
         foregroundColor: Colors.white,
       ),
       body: _loadingCompleted
@@ -188,6 +189,8 @@ class _QuizScreenState extends State<QuizScreen> {
 
   // ── Quiz List ──────────────────────────────────────────────────────────────
   Widget _buildQuizList() {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return StreamBuilder<List<QuizModel>>(
       stream: widget.exhibitorId != null
           ? _fs.getQuizzesForExhibitor(widget.exhibitorId!)
@@ -208,37 +211,34 @@ class _QuizScreenState extends State<QuizScreen> {
             final q = quizzes[i];
             final done = _completedIds.contains(q.id);
             return Card(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              elevation: 2,
               child: ListTile(
                 contentPadding: const EdgeInsets.all(14),
-                leading: Container(
-                  width: 46, height: 46,
-                  decoration: BoxDecoration(
-                    color: done
-                        ? Colors.grey.shade200
-                        : AppColors.quizColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    done ? Icons.check_circle_rounded : Icons.quiz_rounded,
-                    color: done ? AppColors.textMedium : AppColors.quizColor,
-                  ),
+                leading: IconBadge(
+                  icon: done ? Icons.check_circle_rounded : Icons.quiz_rounded,
+                  color: done ? theme.colorScheme.onSurfaceVariant : palette.quizColor,
+                  size: 46,
                 ),
                 title: Text(q.title,
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: done ? AppColors.textMedium : AppColors.textDark)),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                        color:
+                            done ? theme.colorScheme.onSurfaceVariant : null)),
                 subtitle: Text(
                     '${q.questions.length} questions · ${q.timeLimitSeconds}s each'
                     '${done ? ' · Completed' : ''}'),
                 trailing: done
-                    ? const Text('Done ✓',
-                        style: TextStyle(
-                            color: AppColors.textMedium,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12))
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_circle_rounded,
+                              size: 16, color: theme.colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 4),
+                          Text('Done',
+                              style: TextStyle(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12)),
+                        ],
+                      )
                     : const Icon(Icons.arrow_forward_ios_rounded, size: 16),
                 onTap: done
                     ? () => ScaffoldMessenger.of(context).showSnackBar(
@@ -256,6 +256,8 @@ class _QuizScreenState extends State<QuizScreen> {
 
   // ── Question View ──────────────────────────────────────────────────────────
   Widget _buildQuestion() {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     final quiz = _selectedQuiz!;
     final question = quiz.questions[_currentIndex];
     final progress = (_currentIndex + 1) / quiz.questions.length;
@@ -272,38 +274,37 @@ class _QuizScreenState extends State<QuizScreen> {
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: progress,
-                    backgroundColor: Colors.grey.shade200,
-                    valueColor:
-                        const AlwaysStoppedAnimation(AppColors.quizColor),
+                    backgroundColor: palette.cardBg,
+                    valueColor: AlwaysStoppedAnimation(palette.quizColor),
                     minHeight: 7,
                   ),
                 ),
               ),
               const SizedBox(width: 10),
               Text('${_currentIndex + 1}/${quiz.questions.length}',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
+                  style: theme.textTheme.labelLarge),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              const Icon(Icons.timer, color: AppColors.warning, size: 18),
+              Icon(Icons.timer_rounded, color: palette.warning, size: 18),
               const SizedBox(width: 4),
               Text('$_timeLeft s',
                   style: TextStyle(
-                      color: _timeLeft <= 5 ? AppColors.danger : AppColors.warning,
+                      color: _timeLeft <= 5 ? palette.danger : palette.warning,
                       fontWeight: FontWeight.w700,
                       fontSize: 15)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                 decoration: BoxDecoration(
-                  color: AppColors.success.withOpacity(0.15),
+                  color: palette.success.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text('Score: $_score',
-                    style: const TextStyle(
-                        color: AppColors.success, fontWeight: FontWeight.w700)),
+                    style: TextStyle(
+                        color: palette.success, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -312,7 +313,7 @@ class _QuizScreenState extends State<QuizScreen> {
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(
               children: [
-                _Chip('+${question.points} correct', AppColors.success),
+                _Chip('+${question.points} correct', palette.success),
               ],
             ),
           ),
@@ -327,7 +328,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w900,
-                      color: _pointDelta > 0 ? AppColors.success : AppColors.danger),
+                      color: _pointDelta > 0 ? palette.success : palette.danger),
                 ),
               ),
             ),
@@ -336,13 +337,12 @@ class _QuizScreenState extends State<QuizScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: AppColors.quizColor.withOpacity(0.08),
+              color: palette.quizColor.withOpacity(0.08),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.quizColor.withOpacity(0.25)),
+              border: Border.all(color: palette.quizColor.withOpacity(0.25)),
             ),
             child: Text(question.question,
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w700)),
+                style: theme.textTheme.titleMedium),
           ),
           const SizedBox(height: 16),
           // Render based on question type
@@ -352,10 +352,10 @@ class _QuizScreenState extends State<QuizScreen> {
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
-                border:
-                    Border.all(color: const Color(0xFFE0E0E0), width: 1.5),
+                border: Border.all(
+                    color: theme.colorScheme.outlineVariant, width: 1.5),
               ),
               child: DropdownButton<int>(
                 value: _selectedOption >= 0 ? _selectedOption : null,
@@ -387,20 +387,20 @@ class _QuizScreenState extends State<QuizScreen> {
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: selected
-                            ? AppColors.quizColor.withOpacity(0.08)
-                            : Colors.white,
+                            ? palette.quizColor.withOpacity(0.08)
+                            : theme.colorScheme.surface,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                             color: selected
-                                ? AppColors.quizColor
-                                : const Color(0xFFE0E0E0),
+                                ? palette.quizColor
+                                : theme.colorScheme.outlineVariant,
                             width: 1.5),
                       ),
                       child: Row(
                         children: [
                           Checkbox(
                             value: selected,
-                            activeColor: AppColors.quizColor,
+                            activeColor: palette.quizColor,
                             onChanged: (_) => _selectOption(i),
                           ),
                           const SizedBox(width: 10),
@@ -419,14 +419,10 @@ class _QuizScreenState extends State<QuizScreen> {
                     onPressed:
                         _selectedCheckboxes.isEmpty ? null : _submitCheckbox,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.quizColor,
+                      backgroundColor: palette.quizColor,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text('Submit Answer',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    child: const Text('Submit Answer'),
                   ),
                 ),
               ],
@@ -434,8 +430,8 @@ class _QuizScreenState extends State<QuizScreen> {
           else
             // Multiple choice (default) OR show results after answering
             ...List.generate(question.options.length, (i) {
-              Color bg = Colors.white;
-              Color border = const Color(0xFFE0E0E0);
+              Color bg = theme.colorScheme.surface;
+              Color border = theme.colorScheme.outlineVariant;
               if (_answered) {
                 final isCorrect = question.isCheckbox
                     ? question.correctIndices.contains(i)
@@ -445,11 +441,11 @@ class _QuizScreenState extends State<QuizScreen> {
                     : i == _selectedOption;
 
                 if (isCorrect) {
-                  bg = AppColors.success.withOpacity(0.15);
-                  border = AppColors.success;
+                  bg = palette.success.withOpacity(0.15);
+                  border = palette.success;
                 } else if (wasSelected) {
-                  bg = AppColors.danger.withOpacity(0.15);
-                  border = AppColors.danger;
+                  bg = palette.danger.withOpacity(0.15);
+                  border = palette.danger;
                 }
               }
               return GestureDetector(
@@ -469,14 +465,14 @@ class _QuizScreenState extends State<QuizScreen> {
                         width: 28,
                         height: 28,
                         decoration: BoxDecoration(
-                          color: AppColors.quizColor.withOpacity(0.12),
+                          color: palette.quizColor.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(7),
                         ),
                         child: Center(
                           child: Text(['A', 'B', 'C', 'D'][i],
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontWeight: FontWeight.w700,
-                                  color: AppColors.quizColor,
+                                  color: palette.quizColor,
                                   fontSize: 13)),
                         ),
                       ),
@@ -495,11 +491,22 @@ class _QuizScreenState extends State<QuizScreen> {
               margin: const EdgeInsets.only(top: 4),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                color: theme.colorScheme.primary.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Text('💡 ${question.explanation}',
-                  style: const TextStyle(fontSize: 13, color: Colors.blue)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.lightbulb_rounded,
+                      size: 16, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(question.explanation!,
+                        style: TextStyle(
+                            fontSize: 13, color: theme.colorScheme.primary)),
+                  ),
+                ],
+              ),
             ),
         ],
       ),
@@ -508,6 +515,8 @@ class _QuizScreenState extends State<QuizScreen> {
 
   // ── Result ─────────────────────────────────────────────────────────────────
   Widget _buildResult() {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     final quiz = _selectedQuiz!;
     return Center(
       child: Padding(
@@ -515,19 +524,26 @@ class _QuizScreenState extends State<QuizScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('🎉', style: TextStyle(fontSize: 72)),
+            Container(
+              width: 88,
+              height: 88,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: palette.quizColor.withOpacity(0.14),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.emoji_events_rounded,
+                  size: 48, color: palette.quizColor),
+            ),
             const SizedBox(height: 16),
-            const Text('Quiz Complete!',
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+            Text('Quiz Complete!', style: theme.textTheme.displaySmall),
             const SizedBox(height: 8),
             Text('You scored $_score points!',
-                style: const TextStyle(
-                    fontSize: 18, color: AppColors.quizColor)),
+                style: TextStyle(fontSize: 18, color: palette.quizColor)),
             const SizedBox(height: 8),
             Text('Quiz "${quiz.title}" is now locked for you.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: AppColors.textMedium, fontSize: 13)),
+                style: TextStyle(color: palette.textMedium, fontSize: 13)),
             const SizedBox(height: 32),
             FunButton(
               label: widget.initialQuiz != null ? 'Back to Booth' : 'Back to Quizzes',
@@ -543,8 +559,8 @@ class _QuizScreenState extends State<QuizScreen> {
                   });
                 }
               },
-              gradient: const LinearGradient(
-                  colors: [AppColors.quizColor, Color(0xFF00BFA5)]),
+              gradient: LinearGradient(
+                  colors: [palette.quizColor, palette.puzzleColor]),
             ),
           ],
         ),

@@ -1,27 +1,35 @@
+import 'package:flutter/material.dart';
+
 // ─── GAME TYPE REGISTRY ─────────────────────────────────────────────────────
 // Single source of truth for every `gameType` string written to
 // `leaderboard/{uid}.gameBreakdown` and `game_sessions.gameType`. Used to
 // populate the Leaderboard's "Per-Game" filter dropdown. If a new game is
 // added, add its key here too so it shows up as a filter option.
+//
+// `emoji` is kept (not removed) so any screen not yet migrated to the new
+// icon-badge design keeps compiling and rendering exactly as before; `icon`
+// is the new Material Icons equivalent used by redesigned screens — see
+// the UI redesign's Phase 2 (visitor screens).
 class GameTypeDef {
   final String key;
   final String label;
   final String emoji;
-  const GameTypeDef(this.key, this.label, this.emoji);
+  final IconData icon;
+  const GameTypeDef(this.key, this.label, this.emoji, this.icon);
 }
 
 const List<GameTypeDef> kGameTypes = [
-  GameTypeDef('quiz', 'Quiz', '🧠'),
-  GameTypeDef('puzzle', 'Slide Puzzle', '🧩'),
-  GameTypeDef('lucky_draw', 'Lucky Draw', '🎰'),
-  GameTypeDef('reflex_tap', 'Reflex Tap', '⚡'),
-  GameTypeDef('memory_matrix', 'Memory Matrix', '🃏'),
-  GameTypeDef('code_breaker', 'Code Breaker', '🔐'),
-  GameTypeDef('rgb_master', 'RGB Master', '🎨'),
-  GameTypeDef('speed_typing', 'Speed Typing', '⌨️'),
-  GameTypeDef('spin_wheel', 'Spin Wheel', '🎡'),
-  GameTypeDef('scratch_card', 'Scratch Card', '🪙'),
-  GameTypeDef('guess_number', 'Guess the Number', '🔢'),
+  GameTypeDef('quiz', 'Quiz', '🧠', Icons.quiz_rounded),
+  GameTypeDef('puzzle', 'Slide Puzzle', '🧩', Icons.extension_rounded),
+  GameTypeDef('lucky_draw', 'Lucky Draw', '🎰', Icons.confirmation_number_rounded),
+  GameTypeDef('reflex_tap', 'Reflex Tap', '⚡', Icons.bolt_rounded),
+  GameTypeDef('memory_matrix', 'Memory Matrix', '🃏', Icons.style_rounded),
+  GameTypeDef('code_breaker', 'Code Breaker', '🔐', Icons.lock_rounded),
+  GameTypeDef('rgb_master', 'RGB Master', '🎨', Icons.palette_rounded),
+  GameTypeDef('speed_typing', 'Speed Typing', '⌨️', Icons.keyboard_rounded),
+  GameTypeDef('spin_wheel', 'Spin Wheel', '🎡', Icons.autorenew_rounded),
+  GameTypeDef('scratch_card', 'Scratch Card', '🪙', Icons.layers_rounded),
+  GameTypeDef('guess_number', 'Guess the Number', '🔢', Icons.pin_rounded),
 ];
 
 // ─── PER-BOOTH GENERIC GAMES ────────────────────────────────────────────────
@@ -35,12 +43,12 @@ const List<GameTypeDef> kGameTypes = [
 // plus the 3 prize games below) — see FirestoreService.recordGamePlay and
 // BoothAttemptPool.
 const List<GameTypeDef> kGenericBoothGames = [
-  GameTypeDef('reflex_tap', 'Reflex Tap', '⚡'),
-  GameTypeDef('memory_matrix', 'Memory Matrix', '🧩'),
-  GameTypeDef('code_breaker', 'Code Breaker', '🔐'),
-  GameTypeDef('rgb_master', 'RGB Master', '🎨'),
-  GameTypeDef('speed_typing', 'Speed Typing', '⌨️'),
-  GameTypeDef('puzzle', 'Slide Puzzle', '🧩'),
+  GameTypeDef('reflex_tap', 'Reflex Tap', '⚡', Icons.bolt_rounded),
+  GameTypeDef('memory_matrix', 'Memory Matrix', '🧩', Icons.style_rounded),
+  GameTypeDef('code_breaker', 'Code Breaker', '🔐', Icons.lock_rounded),
+  GameTypeDef('rgb_master', 'RGB Master', '🎨', Icons.palette_rounded),
+  GameTypeDef('speed_typing', 'Speed Typing', '⌨️', Icons.keyboard_rounded),
+  GameTypeDef('puzzle', 'Slide Puzzle', '🧩', Icons.extension_rounded),
 ];
 
 /// Default flat points a generic booth game awards on completion until the
@@ -61,7 +69,7 @@ const Map<String, int> kDefaultGamePoints = {
 // screen once the exhibitor has configured content for it — see
 // FirestoreService.getGameContent and the booth screen's conditional tiles.
 const List<GameTypeDef> kPrizeBoothGames = [
-  GameTypeDef('spin_wheel', 'Spin Wheel', '🎡'),
-  GameTypeDef('scratch_card', 'Scratch Card', '🪙'),
-  GameTypeDef('guess_number', 'Guess the Number', '🔢'),
+  GameTypeDef('spin_wheel', 'Spin Wheel', '🎡', Icons.autorenew_rounded),
+  GameTypeDef('scratch_card', 'Scratch Card', '🪙', Icons.layers_rounded),
+  GameTypeDef('guess_number', 'Guess the Number', '🔢', Icons.pin_rounded),
 ];

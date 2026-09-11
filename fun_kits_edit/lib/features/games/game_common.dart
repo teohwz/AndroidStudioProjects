@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/services/firestore_service.dart';
 
 final _fsCommon = FirestoreService();
@@ -50,7 +51,7 @@ Future<bool> submitGameScore(
 /// booth once the dialog closes).
 Future<void> showGameResultDialog(
   BuildContext context, {
-  required String emoji,
+  required IconData icon,
   required String title,
   required String message,
   required Color color,
@@ -64,7 +65,16 @@ Future<void> showGameResultDialog(
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 56)),
+          Container(
+            width: 72,
+            height: 72,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.14),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 36, color: color),
+          ),
           const SizedBox(height: 12),
           Text(title,
               textAlign: TextAlign.center,
@@ -73,7 +83,9 @@ Future<void> showGameResultDialog(
           const SizedBox(height: 8),
           Text(message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textMedium)),
+              style: TextStyle(
+                  color: Theme.of(ctx).extension<AppPalette>()?.textMedium ??
+                      AppColors.textMedium)),
         ],
       ),
       actionsAlignment: MainAxisAlignment.center,
@@ -113,18 +125,31 @@ Future<void> showPlayLimitDialog(BuildContext context, {required Color color}) {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('🔒', style: TextStyle(fontSize: 56)),
+          Container(
+            width: 64,
+            height: 64,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.14),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.lock_rounded, size: 32, color: color),
+          ),
           const SizedBox(height: 12),
-          const Text("You're out of attempts at this booth",
+          Text("You're out of attempts at this booth",
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              style: Theme.of(ctx)
+                  .textTheme
+                  .titleLarge),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "Complete this booth's tasks (follow the exhibitor, play a "
             'featured mini-game) to earn more attempts, or try a different '
             'booth.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textMedium),
+            style: TextStyle(
+                color: Theme.of(ctx).extension<AppPalette>()?.textMedium ??
+                    AppColors.textMedium),
           ),
         ],
       ),

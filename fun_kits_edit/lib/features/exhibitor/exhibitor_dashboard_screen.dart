@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/routes.dart';
-import '../../core/constants/app_colors.dart';
 import '../../core/models/exhibitor_model.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 import '../admin/manage_lucky_draw_screen.dart';
 import '../admin/manage_quiz_screen.dart';
 import '../auth/role_choice_screen.dart';
@@ -27,13 +27,15 @@ class ExhibitorDashboardScreen extends StatelessWidget {
     final auth = context.watch<AuthService>();
     final boothId = auth.myBoothId;
     final fs = FirestoreService();
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('My Booth 🏪',
+        title: const Text('My Booth',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.exhibitorColor,
+        backgroundColor: palette.exhibitorColor,
         foregroundColor: Colors.white,
         actions: [
           PopupMenuButton<String>(
@@ -64,14 +66,14 @@ class ExhibitorDashboardScreen extends StatelessWidget {
         ],
       ),
       body: boothId == null || boothId.isEmpty
-          ? const Center(
+          ? Center(
               child: Padding(
-                padding: EdgeInsets.all(24),
+                padding: const EdgeInsets.all(24),
                 child: Text(
                   'No booth is linked to this account yet. Contact the '
                   'event organiser.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textMedium),
+                  style: TextStyle(color: palette.textMedium),
                 ),
               ),
             )
@@ -88,15 +90,14 @@ class ExhibitorDashboardScreen extends StatelessWidget {
                         booth?.name.isNotEmpty == true
                             ? booth!.name
                             : 'Set up your booth',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
-                            color: AppColors.textDark),
+                            color: palette.textDark),
                       ),
                       const SizedBox(height: 6),
                       Text('Booth #${booth?.boothNumber ?? '—'}',
-                          style:
-                              const TextStyle(color: AppColors.textMedium)),
+                          style: TextStyle(color: palette.textMedium)),
                       const SizedBox(height: 20),
                       _StatsRow(fs: fs, boothId: boothId),
                       const SizedBox(height: 24),
@@ -112,7 +113,7 @@ class ExhibitorDashboardScreen extends StatelessWidget {
                             icon: Icons.palette_rounded,
                             title: 'Customize Booth',
                             subtitle: 'Name, logo, colors, message',
-                            color: AppColors.primary,
+                            color: theme.colorScheme.primary,
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -125,7 +126,7 @@ class ExhibitorDashboardScreen extends StatelessWidget {
                             icon: Icons.videogame_asset_rounded,
                             title: 'Game Settings',
                             subtitle: 'Enable games & set points',
-                            color: AppColors.puzzleColor,
+                            color: palette.puzzleColor,
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -138,7 +139,7 @@ class ExhibitorDashboardScreen extends StatelessWidget {
                             icon: Icons.quiz_rounded,
                             title: 'My Quizzes',
                             subtitle: 'Create & edit quizzes',
-                            color: AppColors.quizColor,
+                            color: palette.quizColor,
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -151,7 +152,7 @@ class ExhibitorDashboardScreen extends StatelessWidget {
                             icon: Icons.casino_rounded,
                             title: 'My Lucky Draws',
                             subtitle: 'Create & run draws',
-                            color: AppColors.luckyDrawColor,
+                            color: palette.luckyDrawColor,
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -164,7 +165,7 @@ class ExhibitorDashboardScreen extends StatelessWidget {
                             icon: Icons.bar_chart_rounded,
                             title: 'Analytics',
                             subtitle: 'Participants, popularity & trends',
-                            color: AppColors.accent,
+                            color: palette.gold,
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -177,7 +178,7 @@ class ExhibitorDashboardScreen extends StatelessWidget {
                             icon: Icons.qr_code_2_rounded,
                             title: 'My QR Code',
                             subtitle: 'View, style, save & print',
-                            color: AppColors.success,
+                            color: palette.success,
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -190,7 +191,7 @@ class ExhibitorDashboardScreen extends StatelessWidget {
                             icon: Icons.card_giftcard_rounded,
                             title: 'Prize Wins',
                             subtitle: 'Hand-out checklist',
-                            color: AppColors.spinWheelColor,
+                            color: palette.spinWheelColor,
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -218,6 +219,8 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return FutureBuilder<Map<String, int>>(
       future: fs.getBoothStats(boothId),
       builder: (context, snap) {
@@ -227,17 +230,17 @@ class _StatsRow extends StatelessWidget {
             _StatTile(
                 label: 'Check-ins',
                 value: stats['checkIns'] ?? 0,
-                color: AppColors.success),
+                color: palette.success),
             const SizedBox(width: 10),
             _StatTile(
                 label: 'Plays',
                 value: stats['totalPlays'] ?? 0,
-                color: AppColors.primary),
+                color: theme.colorScheme.primary),
             const SizedBox(width: 10),
             _StatTile(
                 label: 'Points Given',
                 value: stats['pointsDistributed'] ?? 0,
-                color: AppColors.accent),
+                color: palette.gold),
           ],
         );
       },
@@ -268,8 +271,10 @@ class _StatTile extends StatelessWidget {
                     fontSize: 20, fontWeight: FontWeight.w800, color: color)),
             const SizedBox(height: 2),
             Text(label,
-                style: const TextStyle(
-                    fontSize: 11, color: AppColors.textMedium)),
+                style: TextStyle(
+                    fontSize: 11,
+                    color:
+                        Theme.of(context).extension<AppPalette>()!.textMedium)),
           ],
         ),
       ),

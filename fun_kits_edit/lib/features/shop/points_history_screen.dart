@@ -2,9 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/constants/game_types.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 /// A visitor's own points-earning history — every game/quiz/lucky-draw
 /// session that credited them points, newest first. Reachable from the
@@ -17,22 +17,31 @@ class PointsHistoryScreen extends StatelessWidget {
 
   String _labelFor(String gameType) {
     for (final g in kGameTypes) {
-      if (g.key == gameType) return '${g.emoji} ${g.label}';
+      if (g.key == gameType) return g.label;
     }
     return gameType;
+  }
+
+  IconData _iconFor(String gameType) {
+    for (final g in kGameTypes) {
+      if (g.key == gameType) return g.icon;
+    }
+    return Icons.videogame_asset_rounded;
   }
 
   @override
   Widget build(BuildContext context) {
     final fs = FirestoreService();
     final uid = FirebaseAuth.instance.currentUser?.uid;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Points History 📜',
+        title: const Text('Points History',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
       ),
       body: uid == null
@@ -45,20 +54,21 @@ class PointsHistoryScreen extends StatelessWidget {
                 }
                 final entries = snap.data ?? [];
                 if (entries.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Padding(
-                      padding: EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(24),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('📜', style: TextStyle(fontSize: 56)),
-                          SizedBox(height: 12),
+                          Icon(Icons.receipt_long_rounded,
+                              size: 56, color: theme.colorScheme.primary),
+                          const SizedBox(height: 12),
                           Text("You haven't earned any points yet.",
-                              style: TextStyle(color: AppColors.textMedium)),
-                          SizedBox(height: 4),
+                              style: TextStyle(color: palette.textMedium)),
+                          const SizedBox(height: 4),
                           Text('Scan a booth and play a game to get started!',
                               style: TextStyle(
-                                  color: AppColors.textMedium, fontSize: 12)),
+                                  color: palette.textMedium, fontSize: 12)),
                         ],
                       ),
                     ),
@@ -73,7 +83,7 @@ class PointsHistoryScreen extends StatelessWidget {
                       margin: const EdgeInsets.all(16),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
+                        gradient: palette.primaryGradient,
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Column(
@@ -98,6 +108,7 @@ class PointsHistoryScreen extends StatelessWidget {
                         itemBuilder: (_, i) => _HistoryTile(
                           entry: entries[i],
                           label: _labelFor(entries[i]['gameType'] ?? ''),
+                          icon: _iconFor(entries[i]['gameType'] ?? ''),
                         ),
                       ),
                     ),
@@ -110,12 +121,16 @@ class PointsHistoryScreen extends StatelessWidget {
 }
 
 class _HistoryTile extends StatelessWidget {
-  const _HistoryTile({required this.entry, required this.label});
+  const _HistoryTile(
+      {required this.entry, required this.label, required this.icon});
   final Map<String, dynamic> entry;
   final String label;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     final points = (entry['points'] as num?)?.toInt() ?? 0;
     final playedAt = entry['playedAt'];
     String when = '';
@@ -127,7 +142,7 @@ class _HistoryTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -138,6 +153,8 @@ class _HistoryTile extends StatelessWidget {
       ),
       child: Row(
         children: [
+          Icon(icon, size: 20, color: theme.colorScheme.primary),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -146,8 +163,8 @@ class _HistoryTile extends StatelessWidget {
                     style: const TextStyle(fontWeight: FontWeight.w700)),
                 if (when.isNotEmpty)
                   Text(when,
-                      style: const TextStyle(
-                          fontSize: 11, color: AppColors.textMedium)),
+                      style:
+                          TextStyle(fontSize: 11, color: palette.textMedium)),
               ],
             ),
           ),
@@ -155,7 +172,7 @@ class _HistoryTile extends StatelessWidget {
               style: TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 15,
-                  color: points > 0 ? AppColors.success : AppColors.textMedium)),
+                  color: points > 0 ? palette.success : palette.textMedium)),
         ],
       ),
     );

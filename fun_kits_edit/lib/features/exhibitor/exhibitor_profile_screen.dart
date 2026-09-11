@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/models/exhibitor_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 class ExhibitorProfileScreen extends StatefulWidget {
   const ExhibitorProfileScreen({super.key});
@@ -45,8 +45,12 @@ class _ExhibitorProfileScreenState extends State<ExhibitorProfileScreen> {
     if (mounted) {
       if (isNew) {
         setState(() => _checkedInBooths = [..._checkedInBooths, ex.id]);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('✅ Checked in! +1 attempt earned at this booth.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Row(children: const [
+          Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+          SizedBox(width: 8),
+          Text('Checked in! +1 attempt earned at this booth.'),
+        ])));
       }
     }
   }
@@ -56,12 +60,14 @@ class _ExhibitorProfileScreenState extends State<ExhibitorProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Exhibitors 🏢',
+        title: const Text('Exhibitors',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.exhibitorColor,
+        backgroundColor: palette.exhibitorColor,
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder<List<ExhibitorModel>>(
@@ -102,23 +108,23 @@ class _ExhibitorProfileScreenState extends State<ExhibitorProfileScreen> {
                   controller: _searchCtrl,
                   decoration: InputDecoration(
                     hintText: 'Search by name, booth, category...',
-                    prefixIcon: const Icon(Icons.search_rounded,
-                        color: AppColors.textMedium),
+                    prefixIcon:
+                        Icon(Icons.search_rounded, color: palette.textMedium),
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (_searchCtrl.text.isNotEmpty)
                           IconButton(
-                            icon: const Icon(Icons.clear_rounded,
-                                color: AppColors.textMedium),
+                            icon: Icon(Icons.clear_rounded,
+                                color: palette.textMedium),
                             onPressed: () {
                               _searchCtrl.clear();
                               setState(() => _activeSearch = '');
                             },
                           ),
                         IconButton(
-                          icon: const Icon(Icons.search_rounded,
-                              color: AppColors.exhibitorColor),
+                          icon: Icon(Icons.search_rounded,
+                              color: palette.exhibitorColor),
                           onPressed: () {
                             setState(() => _activeSearch = _searchCtrl.text);
                           },
@@ -126,14 +132,15 @@ class _ExhibitorProfileScreenState extends State<ExhibitorProfileScreen> {
                       ],
                     ),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: theme.colorScheme.surface,
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none),
                     enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                            color: Color(0xFFE0DFFF), width: 1.5)),
+                        borderSide: BorderSide(
+                            color: theme.colorScheme.outlineVariant,
+                            width: 1.5)),
                     contentPadding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   ),
@@ -161,19 +168,19 @@ class _ExhibitorProfileScreenState extends State<ExhibitorProfileScreen> {
                               horizontal: 14, vertical: 4),
                           decoration: BoxDecoration(
                             color: selected
-                                ? AppColors.exhibitorColor
-                                : Colors.white,
+                                ? palette.exhibitorColor
+                                : theme.colorScheme.surface,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                                 color: selected
-                                    ? AppColors.exhibitorColor
-                                    : const Color(0xFFE0DFFF)),
+                                    ? palette.exhibitorColor
+                                    : theme.colorScheme.outlineVariant),
                           ),
                           child: Text(cat,
                               style: TextStyle(
                                   color: selected
                                       ? Colors.white
-                                      : AppColors.textMedium,
+                                      : palette.textMedium,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 13)),
                         ),
@@ -188,8 +195,8 @@ class _ExhibitorProfileScreenState extends State<ExhibitorProfileScreen> {
                 child: Row(
                   children: [
                     Text('${filtered.length} exhibitor${filtered.length != 1 ? 's' : ''}',
-                        style: const TextStyle(
-                            color: AppColors.textMedium, fontSize: 13)),
+                        style: TextStyle(
+                            color: palette.textMedium, fontSize: 13)),
                   ],
                 ),
               ),
@@ -238,6 +245,8 @@ class _ExhibitorCardState extends State<_ExhibitorCard> {
   Widget build(BuildContext context) {
     final ex = widget.exhibitor;
     final color = ex.themeColor;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -281,12 +290,19 @@ class _ExhibitorCardState extends State<_ExhibitorCard> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.amber,
+                        color: palette.gold,
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Text('⭐ Sponsored',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 11)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.star_rounded, size: 13),
+                          SizedBox(width: 3),
+                          Text('Sponsored',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700, fontSize: 11)),
+                        ],
+                      ),
                     ),
                   ),
               ],
@@ -322,10 +338,10 @@ class _ExhibitorCardState extends State<_ExhibitorCard> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(ex.name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
-                                  color: AppColors.textDark)),
+                                  color: palette.textDark)),
                           Text(ex.category,
                               style: TextStyle(
                                   color: color,
@@ -339,7 +355,7 @@ class _ExhibitorCardState extends State<_ExhibitorCard> {
                         _expanded
                             ? Icons.keyboard_arrow_up_rounded
                             : Icons.keyboard_arrow_down_rounded,
-                        color: AppColors.textMedium,
+                        color: palette.textMedium,
                       ),
                       onPressed: () =>
                           setState(() => _expanded = !_expanded),
@@ -349,8 +365,8 @@ class _ExhibitorCardState extends State<_ExhibitorCard> {
                 if (_expanded) ...[
                   const SizedBox(height: 10),
                   Text(ex.description,
-                      style: const TextStyle(
-                          color: AppColors.textMedium, fontSize: 13)),
+                      style: TextStyle(
+                          color: palette.textMedium, fontSize: 13)),
                   const SizedBox(height: 8),
                   if (ex.contactEmail.isNotEmpty)
                     _InfoRow(Icons.email_outlined, ex.contactEmail, color),
@@ -387,18 +403,18 @@ class _ExhibitorCardState extends State<_ExhibitorCard> {
                         ? Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: AppColors.success.withOpacity(0.12),
+                        color: palette.success.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.check_circle_rounded,
-                              color: AppColors.success, size: 18),
-                          SizedBox(width: 6),
+                              color: palette.success, size: 18),
+                          const SizedBox(width: 6),
                           Text('Checked In',
                               style: TextStyle(
-                                  color: AppColors.success,
+                                  color: palette.success,
                                   fontWeight: FontWeight.w700)),
                         ],
                       ),

@@ -6,6 +6,7 @@ import 'package:flutter_fortune_wheel/flutter_fortune_wheel.dart';
 import 'package:confetti/confetti.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../../shared/widgets/recent_winners_list.dart';
@@ -113,12 +114,13 @@ class _SpinWheelScreenState extends State<SpinWheelScreen> {
           builder: (ctx) => AlertDialog(
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            content: const Column(
+            content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('😅', style: TextStyle(fontSize: 48)),
-                SizedBox(height: 8),
-                Text('All out of prizes right now — check back later!',
+                Icon(Icons.sentiment_dissatisfied_rounded,
+                    size: 48, color: widget.accentColor),
+                const SizedBox(height: 8),
+                const Text('All out of prizes right now — check back later!',
                     textAlign: TextAlign.center),
               ],
             ),
@@ -148,7 +150,7 @@ class _SpinWheelScreenState extends State<SpinWheelScreen> {
 
     showGameResultDialog(
       context,
-      emoji: won.isPoints ? '⭐' : '🎁',
+      icon: won.isPoints ? Icons.star_rounded : Icons.card_giftcard_rounded,
       title: won.isPoints ? 'You Won!' : 'You Won a Prize!',
       message: won.isPoints
           ? '+${won.pointsValue} points!'
@@ -161,8 +163,10 @@ class _SpinWheelScreenState extends State<SpinWheelScreen> {
   @override
   Widget build(BuildContext context) {
     final color = widget.accentColor;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: gameAppBar(widget.title, color),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -171,13 +175,13 @@ class _SpinWheelScreenState extends State<SpinWheelScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('🎡', style: TextStyle(fontSize: 64)),
+                      Icon(Icons.autorenew_rounded, size: 64, color: color),
                       const SizedBox(height: 12),
-                      const Text('This booth hasn\'t set up any prizes yet.',
+                      Text('This booth hasn\'t set up any prizes yet.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: AppColors.textMedium)),
+                              color: palette.textMedium)),
                     ],
                   ),
                 )
@@ -234,11 +238,21 @@ class _SpinWheelScreenState extends State<SpinWheelScreen> {
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16)),
                               ),
-                              child: Text(
-                                  _spinning ? 'Spinning...' : 'SPIN THE WHEEL 🎡',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 16)),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (!_spinning) ...[
+                                    const Icon(Icons.autorenew_rounded, size: 18),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  Text(
+                                      _spinning ? 'Spinning...' : 'SPIN THE WHEEL',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 16)),
+                                ],
+                              ),
                             ),
                           ),
                           RecentWinnersList(

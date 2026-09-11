@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
 import '../../core/models/quiz_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 import '../../shared/widgets/fun_button.dart';
 
 /// Exhibitor-scoped — always shows/creates quizzes for [boothId] (the
@@ -31,6 +31,7 @@ class _ManageQuizScreenState extends State<ManageQuizScreen> {
   }
 
   void _confirmDelete(QuizModel q) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -45,8 +46,7 @@ class _ManageQuizScreenState extends State<ManageQuizScreen> {
               Navigator.pop(context);
               await _fs.deleteQuiz(q.id);
             },
-            child:
-                const Text('Delete', style: TextStyle(color: AppColors.danger)),
+            child: Text('Delete', style: TextStyle(color: palette.danger)),
           ),
         ],
       ),
@@ -55,17 +55,19 @@ class _ManageQuizScreenState extends State<ManageQuizScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Manage Quizzes 🧠',
+        title: const Text('Manage Quizzes',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.quizColor,
+        backgroundColor: palette.quizColor,
         foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openQuizSheet(),
-        backgroundColor: AppColors.quizColor,
+        backgroundColor: palette.quizColor,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_rounded),
         label: const Text('New Quiz',
@@ -81,7 +83,7 @@ class _ManageQuizScreenState extends State<ManageQuizScreen> {
           if (quizzes.isEmpty) {
             return Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Text('🧠', style: TextStyle(fontSize: 64)),
+                Icon(Icons.quiz_rounded, size: 64, color: palette.quizColor),
                 const SizedBox(height: 12),
                 const Text('No quizzes yet.',
                     style:
@@ -90,8 +92,8 @@ class _ManageQuizScreenState extends State<ManageQuizScreen> {
                 FunButton(
                   label: 'Create Quiz',
                   onPressed: () => _openQuizSheet(),
-                  gradient: const LinearGradient(
-                      colors: [AppColors.quizColor, Color(0xFF00BFA5)]),
+                  gradient: LinearGradient(
+                      colors: [palette.quizColor, const Color(0xFF00BFA5)]),
                 ),
               ]),
             );
@@ -111,11 +113,10 @@ class _ManageQuizScreenState extends State<ManageQuizScreen> {
                   leading: Container(
                     width: 44, height: 44,
                     decoration: BoxDecoration(
-                      color: AppColors.quizColor.withOpacity(0.15),
+                      color: palette.quizColor.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(11),
                     ),
-                    child: const Icon(Icons.quiz_rounded,
-                        color: AppColors.quizColor),
+                    child: Icon(Icons.quiz_rounded, color: palette.quizColor),
                   ),
                   title: Text(q.title,
                       style:
@@ -128,13 +129,13 @@ class _ManageQuizScreenState extends State<ManageQuizScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.edit_outlined,
-                            color: AppColors.textMedium, size: 20),
+                        icon: Icon(Icons.edit_outlined,
+                            color: palette.textMedium, size: 20),
                         onPressed: () => _openQuizSheet(q),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline,
-                            color: AppColors.danger, size: 20),
+                        icon: Icon(Icons.delete_outline,
+                            color: palette.danger, size: 20),
                         onPressed: () => _confirmDelete(q),
                       ),
                     ],
@@ -242,14 +243,16 @@ class _QuizFormSheetState extends State<_QuizFormSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return DraggableScrollableSheet(
       initialChildSize: 0.9,
       maxChildSize: 0.95,
       minChildSize: 0.5,
       builder: (_, scrollCtrl) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Form(
           key: _formKey,
@@ -274,7 +277,7 @@ class _QuizFormSheetState extends State<_QuizFormSheet> {
               const SizedBox(height: 18),
               TextFormField(
                 controller: _titleCtrl,
-                decoration: _deco('Quiz Title *'),
+                decoration: _deco('Quiz Title *', palette),
                 validator: (v) => v!.isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 12),
@@ -303,10 +306,8 @@ class _QuizFormSheetState extends State<_QuizFormSheet> {
                   const Spacer(),
                   TextButton.icon(
                     onPressed: _addQuestion,
-                    icon: const Icon(Icons.add_rounded,
-                        color: AppColors.quizColor),
-                    label: const Text('Add',
-                        style: TextStyle(color: AppColors.quizColor)),
+                    icon: Icon(Icons.add_rounded, color: palette.quizColor),
+                    label: Text('Add', style: TextStyle(color: palette.quizColor)),
                   ),
                 ],
               ),
@@ -338,9 +339,9 @@ class _QuizFormSheetState extends State<_QuizFormSheet> {
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: Colors.grey.shade200),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text('Tap "Add" to create questions',
-                        style: TextStyle(color: AppColors.textMedium)),
+                        style: TextStyle(color: palette.textMedium)),
                   ),
                 ),
               const SizedBox(height: 24),
@@ -350,8 +351,8 @@ class _QuizFormSheetState extends State<_QuizFormSheet> {
                     : (widget.existing == null ? 'Save Quiz' : 'Update Quiz'),
                 isLoading: _saving,
                 onPressed: _save,
-                gradient: const LinearGradient(
-                    colors: [AppColors.quizColor, Color(0xFF00BFA5)]),
+                gradient: LinearGradient(
+                    colors: [palette.quizColor, const Color(0xFF00BFA5)]),
               ),
               const SizedBox(height: 24),
             ],
@@ -361,7 +362,7 @@ class _QuizFormSheetState extends State<_QuizFormSheet> {
     );
   }
 
-  InputDecoration _deco(String hint) => InputDecoration(
+  InputDecoration _deco(String hint, AppPalette palette) => InputDecoration(
         hintText: hint,
         filled: true,
         fillColor: Colors.grey.shade50,
@@ -374,8 +375,7 @@ class _QuizFormSheetState extends State<_QuizFormSheet> {
                 BorderSide(color: Colors.grey.shade200, width: 1.5)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide:
-                const BorderSide(color: AppColors.quizColor, width: 2)),
+            borderSide: BorderSide(color: palette.quizColor, width: 2)),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       );
@@ -427,6 +427,7 @@ class _QuestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -438,13 +439,12 @@ class _QuestionCard extends StatelessWidget {
             Row(
               children: [
                 Text('Q${index + 1}',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.quizColor)),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800, color: palette.quizColor)),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded,
-                      color: AppColors.danger, size: 20),
+                  icon: Icon(Icons.delete_outline_rounded,
+                      color: palette.danger, size: 20),
                   onPressed: onRemove,
                 ),
               ],
@@ -453,7 +453,7 @@ class _QuestionCard extends StatelessWidget {
               controller: entry.questionCtrl,
               decoration: InputDecoration(
                 hintText: 'Enter question...',
-                hintStyle: const TextStyle(color: AppColors.textMedium),
+                hintStyle: TextStyle(color: palette.textMedium),
                 filled: true,
                 fillColor: Colors.grey.shade50,
                 border: OutlineInputBorder(
@@ -495,13 +495,13 @@ class _QuestionCard extends StatelessWidget {
                       entry.questionType == 'checkbox'
                           ? Checkbox(
                               value: entry.correctIndices.contains(i),
-                              activeColor: AppColors.success,
+                              activeColor: palette.success,
                               onChanged: (v) => onCheckboxToggle(i),
                             )
                           : Radio<int>(
                               value: i,
                               groupValue: entry.correctIndex,
-                              activeColor: AppColors.success,
+                              activeColor: palette.success,
                               onChanged: (v) => onCorrectChanged(v!),
                             ),
                       Expanded(
@@ -509,8 +509,8 @@ class _QuestionCard extends StatelessWidget {
                           controller: entry.optionCtrls[i],
                           decoration: InputDecoration(
                             hintText: 'Option ${['A', 'B', 'C', 'D'][i]}',
-                            hintStyle: const TextStyle(
-                                color: AppColors.textMedium, fontSize: 13),
+                            hintStyle: TextStyle(
+                                color: palette.textMedium, fontSize: 13),
                             filled: true,
                             fillColor: Colors.grey.shade50,
                             border: OutlineInputBorder(
@@ -530,18 +530,25 @@ class _QuestionCard extends StatelessWidget {
                 entry.questionType == 'checkbox'
                     ? '● Green checkboxes = correct answers (multi-select)'
                     : '● Green radio = correct answer',
-                style:
-                    const TextStyle(color: AppColors.textMedium, fontSize: 11)),
+                style: TextStyle(color: palette.textMedium, fontSize: 11)),
             const SizedBox(height: 10),
             // Bonus points
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('✅ Bonus pts',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.success)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_rounded,
+                        size: 14, color: palette.success),
+                    const SizedBox(width: 4),
+                    Text('Bonus pts',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: palette.success)),
+                  ],
+                ),
                 const SizedBox(height: 4),
                 DropdownButton<int>(
                   value: entry.bonusPoints,

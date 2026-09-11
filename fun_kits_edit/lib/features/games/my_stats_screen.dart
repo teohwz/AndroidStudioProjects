@@ -2,9 +2,9 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/constants/game_types.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 /// A visitor's own play stats — most played game, average score per game,
 /// and total engagement time — aggregated client-side from the same
@@ -25,13 +25,15 @@ class MyStatsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final fs = FirestoreService();
     final uid = FirebaseAuth.instance.currentUser?.uid;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('My Stats 📊',
+        title: const Text('My Stats',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
       ),
       body: uid == null
@@ -44,20 +46,21 @@ class MyStatsScreen extends StatelessWidget {
                 }
                 final entries = snap.data ?? [];
                 if (entries.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Padding(
-                      padding: EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(24),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('📊', style: TextStyle(fontSize: 56)),
-                          SizedBox(height: 12),
+                          Icon(Icons.bar_chart_rounded,
+                              size: 56, color: theme.colorScheme.primary),
+                          const SizedBox(height: 12),
                           Text("You haven't played anything yet.",
-                              style: TextStyle(color: AppColors.textMedium)),
-                          SizedBox(height: 4),
+                              style: TextStyle(color: palette.textMedium)),
+                          const SizedBox(height: 4),
                           Text('Scan a booth and play a game to see your stats!',
                               style: TextStyle(
-                                  color: AppColors.textMedium, fontSize: 12)),
+                                  color: palette.textMedium, fontSize: 12)),
                         ],
                       ),
                     ),
@@ -78,9 +81,9 @@ class MyStatsScreen extends StatelessWidget {
                 }
 
                 if (byGame.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Text("You haven't played anything yet.",
-                        style: TextStyle(color: AppColors.textMedium)),
+                        style: TextStyle(color: palette.textMedium)),
                   );
                 }
 
@@ -102,22 +105,22 @@ class MyStatsScreen extends StatelessWidget {
                         children: [
                           Expanded(
                             child: _SummaryCard(
-                              emoji: _emojiFor(mostPlayed.key),
+                              icon: _iconFor(mostPlayed.key),
                               label: 'Most Played',
                               value: _labelFor(mostPlayed.key),
                               sub:
                                   '${mostPlayed.value.count} play${mostPlayed.value.count == 1 ? '' : 's'}',
-                              gradient: AppColors.primaryGradient,
+                              gradient: palette.primaryGradient,
                             ),
                           ),
                           const SizedBox(width: 14),
                           Expanded(
                             child: _SummaryCard(
-                              emoji: '⏱️',
+                              icon: Icons.timer_rounded,
                               label: 'Engagement Time',
                               value: _formatDuration(totalDurationMs),
                               sub: 'across ${entries.length} session${entries.length == 1 ? '' : 's'}',
-                              gradient: AppColors.secondaryGradient,
+                              gradient: palette.secondaryGradient,
                             ),
                           ),
                         ],
@@ -130,7 +133,7 @@ class MyStatsScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.fromLTRB(12, 20, 20, 8),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: theme.colorScheme.surface,
                           borderRadius: BorderRadius.circular(18),
                           boxShadow: [
                             BoxShadow(
@@ -150,7 +153,7 @@ class MyStatsScreen extends StatelessWidget {
                       ...chartGames.map((g) => Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: _GameRow(
-                              emoji: g.emoji,
+                              icon: g.icon,
                               label: g.label,
                               count: byGame[g.key]!.count,
                               avg: byGame[g.key]!.avgPoints,
@@ -171,11 +174,11 @@ class MyStatsScreen extends StatelessWidget {
     return gameType;
   }
 
-  static String _emojiFor(String gameType) {
+  static IconData _iconFor(String gameType) {
     for (final g in kGameTypes) {
-      if (g.key == gameType) return g.emoji;
+      if (g.key == gameType) return g.icon;
     }
-    return '🎮';
+    return Icons.videogame_asset_rounded;
   }
 
   static String _formatDuration(int ms) {
@@ -202,10 +205,12 @@ class _AvgScoreChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     if (games.isEmpty) {
-      return const Center(
+      return Center(
           child: Text('No scored games yet',
-              style: TextStyle(color: AppColors.textMedium)));
+              style: TextStyle(color: palette.textMedium)));
     }
     final maxAvg = games
         .map((g) => byGame[g.key]!.avgPoints)
@@ -234,8 +239,8 @@ class _AvgScoreChart extends StatelessWidget {
                 if (i < 0 || i >= games.length) return const SizedBox.shrink();
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(games[i].emoji,
-                      style: const TextStyle(fontSize: 16)),
+                  child: Icon(games[i].icon,
+                      size: 16, color: theme.colorScheme.primary),
                 );
               },
             ),
@@ -246,7 +251,7 @@ class _AvgScoreChart extends StatelessWidget {
             BarChartGroupData(x: i, barRods: [
               BarChartRodData(
                 toY: byGame[games[i].key]!.avgPoints,
-                color: AppColors.primary,
+                color: theme.colorScheme.primary,
                 width: 22,
                 borderRadius: BorderRadius.circular(6),
               ),
@@ -259,13 +264,13 @@ class _AvgScoreChart extends StatelessWidget {
 
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
-    required this.emoji,
+    required this.icon,
     required this.label,
     required this.value,
     required this.sub,
     required this.gradient,
   });
-  final String emoji;
+  final IconData icon;
   final String label;
   final String value;
   final String sub;
@@ -282,7 +287,7 @@ class _SummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 24)),
+          Icon(icon, color: Colors.white, size: 24),
           const SizedBox(height: 8),
           Text(label,
               style: const TextStyle(color: Colors.white70, fontSize: 11)),
@@ -305,22 +310,24 @@ class _SummaryCard extends StatelessWidget {
 
 class _GameRow extends StatelessWidget {
   const _GameRow({
-    required this.emoji,
+    required this.icon,
     required this.label,
     required this.count,
     required this.avg,
   });
-  final String emoji;
+  final IconData icon;
   final String label;
   final int count;
   final double avg;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -331,21 +338,20 @@ class _GameRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 20)),
+          Icon(icon, size: 20, color: theme.colorScheme.primary),
           const SizedBox(width: 10),
           Expanded(
             child: Text(label,
                 style: const TextStyle(fontWeight: FontWeight.w700)),
           ),
           Text('$count play${count == 1 ? '' : 's'}',
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textMedium)),
+              style: TextStyle(fontSize: 12, color: palette.textMedium)),
           const SizedBox(width: 10),
           Text('avg ${avg.toStringAsFixed(0)} pts',
-              style: const TextStyle(
+              style: TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 13,
-                  color: AppColors.primary)),
+                  color: theme.colorScheme.primary)),
         ],
       ),
     );

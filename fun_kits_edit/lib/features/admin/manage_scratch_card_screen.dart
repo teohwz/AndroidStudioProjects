@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/services/storage_service.dart';
+import '../../core/theme/app_palette.dart';
 import '../../shared/widgets/fun_button.dart';
 import 'prize_segment_editor.dart';
 
@@ -82,18 +82,28 @@ class _ManageScratchCardScreenState extends State<ManageScratchCardScreen> {
     );
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Scratch Card saved! 🪙')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+          SizedBox(width: 8),
+          Text('Scratch Card saved!'),
+        ],
+      ),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Scratch Card 🪙',
+        title: const Text('Scratch Card',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.scratchCardColor,
+        backgroundColor: palette.scratchCardColor,
         foregroundColor: Colors.white,
       ),
       body: _loading
@@ -101,11 +111,11 @@ class _ManageScratchCardScreenState extends State<ManageScratchCardScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
               children: [
-                const Text(
+                Text(
                   'Visitors scratch to reveal a prize underneath your card '
                   'image. Set the image, the message shown once revealed, '
                   'and the prize pool below.',
-                  style: TextStyle(color: AppColors.textMedium, fontSize: 12),
+                  style: TextStyle(color: palette.textMedium, fontSize: 12),
                 ),
                 const SizedBox(height: 16),
                 InkWell(
@@ -114,9 +124,9 @@ class _ManageScratchCardScreenState extends State<ManageScratchCardScreen> {
                   child: Container(
                     height: 140,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: theme.colorScheme.surface,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.cardBg, width: 1.5),
+                      border: Border.all(color: palette.cardBg, width: 1.5),
                       image: _imageUrl.isNotEmpty
                           ? DecorationImage(
                               image: NetworkImage(_imageUrl), fit: BoxFit.cover)
@@ -126,16 +136,16 @@ class _ManageScratchCardScreenState extends State<ManageScratchCardScreen> {
                     child: _uploadingImage
                         ? const CircularProgressIndicator(strokeWidth: 2)
                         : _imageUrl.isEmpty
-                            ? const Column(
+                            ? Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(Icons.add_photo_alternate_rounded,
-                                      color: AppColors.textMedium),
-                                  SizedBox(height: 4),
+                                      color: palette.textMedium),
+                                  const SizedBox(height: 4),
                                   Text('Card Image',
                                       style: TextStyle(
                                           fontSize: 12,
-                                          color: AppColors.textMedium)),
+                                          color: palette.textMedium)),
                                 ],
                               )
                             : Container(
@@ -164,7 +174,7 @@ class _ManageScratchCardScreenState extends State<ManageScratchCardScreen> {
                 const SizedBox(height: 16),
                 PrizeSegmentList(
                   segments: _segments,
-                  accentColor: AppColors.scratchCardColor,
+                  accentColor: palette.scratchCardColor,
                   onChanged: (s) => setState(() => _segments = s),
                 ),
               ],
@@ -178,9 +188,9 @@ class _ManageScratchCardScreenState extends State<ManageScratchCardScreen> {
                   label: 'Save Scratch Card',
                   isLoading: _saving,
                   onPressed: _save,
-                  gradient: const LinearGradient(colors: [
-                    AppColors.scratchCardColor,
-                    Color(0xFFFFD37A),
+                  gradient: LinearGradient(colors: [
+                    palette.scratchCardColor,
+                    const Color(0xFFFFD37A),
                   ]),
                 ),
               ),

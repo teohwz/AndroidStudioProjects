@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/models/exhibitor_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/services/storage_service.dart';
+import '../../core/theme/app_palette.dart';
 
 /// An exhibitor's own booth customization form — name, logo, banner,
 /// colors, background, welcome message, description. Everything here is
@@ -148,20 +149,30 @@ class _ExhibitorBoothEditorScreenState
     await _fs.updateBoothCustomization(updated);
     if (mounted) {
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Booth saved ✅')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Text('Booth saved'),
+          ],
+        ),
+      ));
       Navigator.pop(context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Customize My Booth 🎨',
+        title: const Text('Customize My Booth',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder<ExhibitorModel?>(
@@ -190,6 +201,7 @@ class _ExhibitorBoothEditorScreenState
                         url: _logoUrl,
                         uploading: _uploadingLogo,
                         onTap: _uploadLogo,
+                        palette: palette,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -199,6 +211,7 @@ class _ExhibitorBoothEditorScreenState
                         url: _bannerUrl,
                         uploading: _uploadingBanner,
                         onTap: _uploadBanner,
+                        palette: palette,
                       ),
                     ),
                   ],
@@ -257,7 +270,7 @@ class _ExhibitorBoothEditorScreenState
                   child: FilledButton(
                     onPressed: _saving ? null : _save,
                     style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: theme.colorScheme.primary,
                         padding: const EdgeInsets.symmetric(vertical: 16)),
                     child: _saving
                         ? const SizedBox(
@@ -314,11 +327,13 @@ class _ImageTile extends StatelessWidget {
       {required this.label,
       required this.url,
       required this.uploading,
-      required this.onTap});
+      required this.onTap,
+      required this.palette});
   final String label;
   final String url;
   final bool uploading;
   final VoidCallback onTap;
+  final AppPalette palette;
 
   @override
   Widget build(BuildContext context) {
@@ -328,9 +343,9 @@ class _ImageTile extends StatelessWidget {
       child: Container(
         height: 110,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.cardBg, width: 1.5),
+          border: Border.all(color: palette.cardBg, width: 1.5),
           image: url.isNotEmpty
               ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover)
               : null,
@@ -342,12 +357,12 @@ class _ImageTile extends StatelessWidget {
                 ? Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.add_photo_alternate_rounded,
-                          color: AppColors.textMedium),
+                      Icon(Icons.add_photo_alternate_rounded,
+                          color: palette.textMedium),
                       const SizedBox(height: 4),
                       Text(label,
-                          style: const TextStyle(
-                              fontSize: 11, color: AppColors.textMedium)),
+                          style:
+                              TextStyle(fontSize: 11, color: palette.textMedium)),
                     ],
                   )
                 : Container(

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/models/notification_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 /// A visitor's own notification inbox — prize wins and Rewards Shop
 /// redemption confirmations (see FirestoreService's _notifyUser helper).
@@ -17,12 +17,14 @@ class NotificationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final fs = FirestoreService();
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Notifications 🔔',
+        title: const Text('Notifications',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
       ),
       body: uid == null
@@ -36,21 +38,22 @@ class NotificationsScreen extends StatelessWidget {
                 }
                 final items = snap.data ?? [];
                 if (items.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('🔔', style: TextStyle(fontSize: 64)),
-                        SizedBox(height: 12),
+                        Icon(Icons.notifications_none_rounded,
+                            size: 64, color: theme.colorScheme.primary),
+                        const SizedBox(height: 12),
                         Text('No notifications yet.',
-                            style: TextStyle(color: AppColors.textMedium)),
-                        SizedBox(height: 6),
+                            style: TextStyle(color: palette.textMedium)),
+                        const SizedBox(height: 6),
                         Text(
                           "You'll be notified here if you win a prize or\n"
                           'redeem a voucher.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: AppColors.textMedium, fontSize: 12),
+                          style:
+                              TextStyle(color: palette.textMedium, fontSize: 12),
                         ),
                       ],
                     ),
@@ -65,13 +68,17 @@ class NotificationsScreen extends StatelessWidget {
                     return Card(
                       elevation: n.read ? 0.5 : 2,
                       color: n.read
-                          ? AppColors.cardBg.withOpacity(0.5)
-                          : Colors.white,
+                          ? palette.cardBg.withOpacity(0.5)
+                          : theme.colorScheme.surface,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
                       child: ListTile(
-                        leading: Text(n.type == 'redemption' ? '🎁' : '🏆',
-                            style: const TextStyle(fontSize: 26)),
+                        leading: Icon(
+                            n.type == 'redemption'
+                                ? Icons.card_giftcard_rounded
+                                : Icons.emoji_events_rounded,
+                            size: 26,
+                            color: theme.colorScheme.primary),
                         title: Text(n.title,
                             style: TextStyle(
                                 fontWeight:

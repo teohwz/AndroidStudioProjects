@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/services/auth_service.dart';
 import '../../app/routes.dart';
 import '../../shared/widgets/fun_button.dart';
@@ -136,7 +135,7 @@ class _VisitorRegisterScreenState extends State<VisitorRegisterScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Visitor Registration 🎟️',
+                            Text('Visitor Registration',
                                 style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w800,

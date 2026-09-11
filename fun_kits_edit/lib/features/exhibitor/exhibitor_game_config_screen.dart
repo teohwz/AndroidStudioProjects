@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/constants/game_types.dart';
 import '../../core/models/exhibitor_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 import '../admin/manage_spin_wheel_screen.dart';
 import '../admin/manage_scratch_card_screen.dart';
 import '../admin/manage_guess_number_screen.dart';
@@ -24,12 +24,14 @@ class ExhibitorGameConfigScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fs = FirestoreService();
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Game Settings 🎮',
+        title: const Text('Game Settings',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder<ExhibitorModel?>(
@@ -42,13 +44,13 @@ class ExhibitorGameConfigScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const Padding(
-                padding: EdgeInsets.only(bottom: 12),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
                   'Every visitor gets 1 free play per game here, plus one '
                   'shared bonus play (spent on whichever game they pick) '
                   'once they check in to your booth.',
-                  style: TextStyle(color: AppColors.textMedium, fontSize: 12),
+                  style: TextStyle(color: palette.textMedium, fontSize: 12),
                 ),
               ),
               for (final g in kGenericBoothGames)
@@ -56,42 +58,50 @@ class ExhibitorGameConfigScreen extends StatelessWidget {
                   boothId: boothId,
                   gameType: g.key,
                   label: g.label,
-                  emoji: g.emoji,
+                  icon: g.icon,
                   config: booth.configFor(g.key),
                   fs: fs,
                   customizeBuilder: g.key == 'memory_matrix'
                       ? (context) => ManageMemoryCardsScreen(boothId: boothId)
                       : null,
                 ),
-              const Padding(
-                padding: EdgeInsets.only(top: 8, bottom: 12),
-                child: Text('Prize Games 🎁',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 12),
+                child: Row(
+                  children: [
+                    Icon(Icons.card_giftcard_rounded,
+                        size: 18, color: palette.textDark),
+                    const SizedBox(width: 6),
+                    const Text('Prize Games',
+                        style:
+                            TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  ],
+                ),
               ),
-              const Padding(
-                padding: EdgeInsets.only(bottom: 12),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
                   'These only appear on your booth once you\'ve customized '
                   'them below — set up their prizes to switch them on.',
-                  style: TextStyle(color: AppColors.textMedium, fontSize: 12),
+                  style: TextStyle(color: palette.textMedium, fontSize: 12),
                 ),
               ),
               _PrizeGameCard(
-                emoji: '🎡',
+                icon: Icons.autorenew_rounded,
                 label: 'Spin Wheel',
-                color: AppColors.spinWheelColor,
+                color: palette.spinWheelColor,
                 builder: (context) => ManageSpinWheelScreen(boothId: boothId),
               ),
               _PrizeGameCard(
-                emoji: '🪙',
+                icon: Icons.layers_rounded,
                 label: 'Scratch Card',
-                color: AppColors.scratchCardColor,
+                color: palette.scratchCardColor,
                 builder: (context) => ManageScratchCardScreen(boothId: boothId),
               ),
               _PrizeGameCard(
-                emoji: '🔢',
+                icon: Icons.pin_rounded,
                 label: 'Guess the Number',
-                color: AppColors.guessNumberColor,
+                color: palette.guessNumberColor,
                 builder: (context) => ManageGuessNumberScreen(boothId: boothId),
               ),
             ],
@@ -107,7 +117,7 @@ class _GameConfigCard extends StatefulWidget {
     required this.boothId,
     required this.gameType,
     required this.label,
-    required this.emoji,
+    required this.icon,
     required this.config,
     required this.fs,
     this.customizeBuilder,
@@ -116,7 +126,7 @@ class _GameConfigCard extends StatefulWidget {
   final String boothId;
   final String gameType;
   final String label;
-  final String emoji;
+  final IconData icon;
   final BoothGameConfig config;
   final FirestoreService fs;
   /// When set, shows a "Customize" button that pushes this screen — used
@@ -169,11 +179,13 @@ class _GameConfigCardState extends State<_GameConfigCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -181,7 +193,7 @@ class _GameConfigCardState extends State<_GameConfigCard> {
         children: [
           Row(
             children: [
-              Text(widget.emoji, style: const TextStyle(fontSize: 20)),
+              Icon(widget.icon, size: 20, color: palette.textDark),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(widget.label,
@@ -196,14 +208,14 @@ class _GameConfigCardState extends State<_GameConfigCard> {
                   });
                   _save();
                 },
-                activeThumbColor: AppColors.success,
+                activeThumbColor: palette.success,
               ),
             ],
           ),
           Row(
             children: [
-              const Text('Points on completion:',
-                  style: TextStyle(fontSize: 12, color: AppColors.textMedium)),
+              Text('Points on completion:',
+                  style: TextStyle(fontSize: 12, color: palette.textMedium)),
               const SizedBox(width: 10),
               SizedBox(
                 width: 70,
@@ -243,13 +255,13 @@ class _GameConfigCardState extends State<_GameConfigCard> {
 /// what actually turns it on for visitors).
 class _PrizeGameCard extends StatelessWidget {
   const _PrizeGameCard({
-    required this.emoji,
+    required this.icon,
     required this.label,
     required this.color,
     required this.builder,
   });
 
-  final String emoji;
+  final IconData icon;
   final String label;
   final Color color;
   final WidgetBuilder builder;
@@ -260,13 +272,13 @@ class _PrizeGameCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withOpacity(0.25)),
       ),
       child: Row(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 20)),
+          Icon(icon, size: 20, color: color),
           const SizedBox(width: 8),
           Expanded(
             child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),

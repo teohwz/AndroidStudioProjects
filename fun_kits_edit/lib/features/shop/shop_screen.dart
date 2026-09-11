@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/constants/brand_styles.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/models/reward_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../../shared/widgets/register_required_dialog.dart';
@@ -119,13 +119,15 @@ class _ShopScreenState extends State<ShopScreen> {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final isAnonymous = FirebaseAuth.instance.currentUser?.isAnonymous ?? true;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Points Shop 🛍️',
+        title: const Text('Points Shop',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -173,14 +175,15 @@ class _ShopScreenState extends State<ShopScreen> {
                               ),
                             const SizedBox(height: 20),
                             if (rewards.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 40),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 40),
                                 child: Center(
                                   child: Text(
                                     'No vouchers available right now — check back soon!',
                                     textAlign: TextAlign.center,
-                                    style:
-                                        TextStyle(color: AppColors.textMedium),
+                                    style: TextStyle(
+                                        color: palette.textMedium),
                                   ),
                                 ),
                               )
@@ -225,15 +228,16 @@ class _PointsBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
+        gradient: palette.primaryGradient,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         children: [
-          const Text('💰', style: TextStyle(fontSize: 32)),
+          const Icon(Icons.paid_rounded, color: Colors.white, size: 32),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -261,16 +265,17 @@ class _SavePointsBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.warning.withOpacity(0.12),
+        color: palette.warning.withOpacity(0.12),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.warning.withOpacity(0.4)),
+        border: Border.all(color: palette.warning.withOpacity(0.4)),
       ),
       child: Row(
         children: [
-          const Text('⚠️', style: TextStyle(fontSize: 22)),
+          Icon(Icons.warning_amber_rounded, size: 22, color: palette.warning),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -282,9 +287,9 @@ class _SavePointsBanner extends StatelessWidget {
                       TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
                 ),
                 const SizedBox(height: 2),
-                const Text(
+                Text(
                   'Uninstalling the app deletes them for good — add an email to keep them safe.',
-                  style: TextStyle(color: AppColors.textMedium, fontSize: 12),
+                  style: TextStyle(color: palette.textMedium, fontSize: 12),
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
@@ -292,7 +297,7 @@ class _SavePointsBanner extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: onSave,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.warning,
+                      backgroundColor: palette.warning,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       shape: RoundedRectangleBorder(
@@ -330,10 +335,12 @@ class _VoucherCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = brandStyleFor(reward.brandName);
     final outOfStock = stockLevel == StockLevel.outOfStock;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -394,13 +401,11 @@ class _VoucherCard extends StatelessWidget {
                         fontWeight: FontWeight.w800, fontSize: 13)),
                 const SizedBox(height: 2),
                 Text('RM${reward.voucherValue} Voucher',
-                    style: const TextStyle(
-                        color: AppColors.textMedium, fontSize: 11)),
+                    style: TextStyle(color: palette.textMedium, fontSize: 11)),
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(Icons.stars_rounded,
-                        size: 14, color: AppColors.warning),
+                    Icon(Icons.stars_rounded, size: 14, color: palette.warning),
                     const SizedBox(width: 3),
                     Text('${reward.pointsRequired} pts',
                         style: const TextStyle(
@@ -412,10 +417,10 @@ class _VoucherCard extends StatelessWidget {
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         color: outOfStock
-                            ? AppColors.danger
+                            ? palette.danger
                             : stockLevel == StockLevel.low
-                                ? AppColors.warning
-                                : AppColors.textMedium,
+                                ? palette.warning
+                                : palette.textMedium,
                       ),
                     ),
                   ],
@@ -427,10 +432,11 @@ class _VoucherCard extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: (outOfStock || busy) ? null : onRedeem,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          outOfStock ? Colors.grey.shade300 : AppColors.primary,
+                      backgroundColor: outOfStock
+                          ? theme.colorScheme.outlineVariant
+                          : theme.colorScheme.primary,
                       foregroundColor:
-                          outOfStock ? AppColors.textMedium : Colors.white,
+                          outOfStock ? palette.textMedium : Colors.white,
                       padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -525,6 +531,7 @@ class _RedeemConfirmationDialogState
   @override
   Widget build(BuildContext context) {
     final reward = widget.reward;
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return AlertDialog(
       title: Text('Redeem ${reward.name}',
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
@@ -562,10 +569,10 @@ class _RedeemConfirmationDialogState
                 },
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'This is a demo — no real voucher code is issued. Your '
                 'e-voucher will show as "Pending Delivery" after redemption.',
-                style: TextStyle(fontSize: 11, color: AppColors.textMedium),
+                style: TextStyle(fontSize: 11, color: palette.textMedium),
               ),
             ],
           ),
@@ -587,19 +594,23 @@ class _RedeemConfirmationDialogState
     );
   }
 
-  Widget _row(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label,
-                style: const TextStyle(
-                    color: AppColors.textMedium, fontSize: 12)),
-            Text(value,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-          ],
-        ),
+  Widget _row(String label, String value) => Builder(
+        builder: (context) {
+          final palette = Theme.of(context).extension<AppPalette>()!;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(label,
+                    style: TextStyle(color: palette.textMedium, fontSize: 12)),
+                Text(value,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 12)),
+              ],
+            ),
+          );
+        },
       );
 }
 
@@ -617,12 +628,15 @@ class _RedeemSuccessDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('🎉', style: TextStyle(fontSize: 48)),
+          Icon(Icons.celebration_rounded,
+              size: 48, color: theme.colorScheme.primary),
           const SizedBox(height: 10),
           const Text('Redemption Successful',
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
@@ -630,7 +644,7 @@ class _RedeemSuccessDialog extends StatelessWidget {
           Text(
             'Your ${reward.brandName} ${reward.name} has been reserved.',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textMedium),
+            style: TextStyle(color: palette.textMedium),
           ),
           const SizedBox(height: 16),
           _detailRow('Delivery email', email),
@@ -652,18 +666,22 @@ class _RedeemSuccessDialog extends StatelessWidget {
     );
   }
 
-  Widget _detailRow(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: const TextStyle(
-                    color: AppColors.textMedium, fontSize: 11)),
-            Text(value,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
-          ],
-        ),
+  Widget _detailRow(String label, String value) => Builder(
+        builder: (context) {
+          final palette = Theme.of(context).extension<AppPalette>()!;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: TextStyle(color: palette.textMedium, fontSize: 11)),
+                Text(value,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 13)),
+              ],
+            ),
+          );
+        },
       );
 }

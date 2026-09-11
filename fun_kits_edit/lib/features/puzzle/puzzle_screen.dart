@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/services/firestore_service.dart';
 import '../../shared/widgets/fun_button.dart';
 import '../games/game_common.dart';
@@ -182,9 +182,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         exhibitorId: widget.exhibitorId, durationMs: durationMs);
     await _clearProgress();
     if (!mounted) return;
+    final palette = Theme.of(context).extension<AppPalette>()!;
     if (!allowed) {
       setState(() => _locked = true);
-      showPlayLimitDialog(context, color: AppColors.puzzleColor);
+      showPlayLimitDialog(context, color: palette.puzzleColor);
       return;
     }
     showDialog(
@@ -192,8 +193,14 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('🎉 Puzzle Solved!',
-            style: TextStyle(fontWeight: FontWeight.w800)),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.emoji_events_rounded, color: palette.puzzleColor),
+            const SizedBox(width: 8),
+            const Text('Puzzle Solved!'),
+          ],
+        ),
         content: Text('Solved in $_moves moves!\n+$points points earned!'),
         actions: [
           TextButton(
@@ -218,16 +225,16 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    final palette = Theme.of(context).extension<AppPalette>()!;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Slide Puzzle 🧩',
-            style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.puzzleColor,
+        title: const Text('Slide Puzzle'),
+        backgroundColor: palette.puzzleColor,
         foregroundColor: Colors.white,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: _pauseAndReturn,
         ),
       ),
@@ -236,30 +243,41 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   Widget _buildLocked() {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('🔒', style: TextStyle(fontSize: 64)),
+            Container(
+              width: 72,
+              height: 72,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: palette.exhibitorColor.withOpacity(0.14),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.lock_rounded,
+                  size: 36, color: palette.exhibitorColor),
+            ),
             const SizedBox(height: 16),
-            const Text('No Attempts Left',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            Text('No Attempts Left', style: theme.textTheme.displaySmall),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               "You've used up this booth's shared attempts. Complete a "
               'booth task (follow the exhibitor, play a featured mini-game) '
               'to earn more, or try another booth!',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textMedium),
+              style: TextStyle(color: palette.textMedium),
             ),
             const SizedBox(height: 24),
             FunButton(
               label: 'Back to Booth',
               onPressed: () => Navigator.pop(context),
-              gradient: const LinearGradient(
-                  colors: [AppColors.exhibitorColor, Color(0xFF00BFA5)]),
+              gradient: LinearGradient(
+                  colors: [palette.exhibitorColor, palette.quizColor]),
             ),
           ],
         ),
@@ -268,6 +286,8 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   Widget _buildPuzzle() {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     final screenWidth = MediaQuery.of(context).size.width;
     final gridSize = (screenWidth - 64).clamp(0.0, 280.0);
 
@@ -282,17 +302,15 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
               _Stat(
                 label: 'Points',
                 value: '$_currentPoints',
-                color: _currentPoints <= 10
-                    ? AppColors.danger
-                    : AppColors.success,
+                color: _currentPoints <= 10 ? palette.danger : palette.success,
               ),
             ],
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Arrange numbers 1–8 in order.\nEach move deducts 5 points (min 5).',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textMedium, fontSize: 12),
+            style: TextStyle(color: palette.textMedium, fontSize: 12),
           ),
           const SizedBox(height: 16),
           SizedBox(
@@ -316,14 +334,14 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                     duration: const Duration(milliseconds: 120),
                     decoration: BoxDecoration(
                       color: isEmpty
-                          ? Colors.grey.shade200
-                          : AppColors.puzzleColor.withOpacity(0.85),
+                          ? theme.colorScheme.outlineVariant.withOpacity(0.3)
+                          : palette.puzzleColor.withOpacity(0.85),
                       borderRadius: BorderRadius.circular(10),
                       boxShadow: isEmpty
                           ? []
                           : [
                               BoxShadow(
-                                  color: AppColors.puzzleColor.withOpacity(0.3),
+                                  color: palette.puzzleColor.withOpacity(0.3),
                                   blurRadius: 4,
                                   offset: const Offset(0, 2)),
                             ],
@@ -359,15 +377,16 @@ class _Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Column(
       children: [
         Text(value,
             style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
-                color: color ?? AppColors.textDark)),
-        Text(label,
-            style: const TextStyle(color: AppColors.textMedium, fontSize: 11)),
+                color: color ?? palette.textDark)),
+        Text(label, style: TextStyle(color: palette.textMedium, fontSize: 11)),
       ],
     );
   }

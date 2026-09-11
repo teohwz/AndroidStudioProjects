@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/services/auth_service.dart';
 import '../../app/routes.dart';
 import '../../shared/widgets/fun_button.dart';
@@ -105,7 +104,7 @@ class _ExhibitorRegisterScreenState extends State<ExhibitorRegisterScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Exhibitor Registration 🏪',
+                            Text('Exhibitor Registration',
                                 style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w800,
@@ -185,7 +184,9 @@ class _ExhibitorRegisterScreenState extends State<ExhibitorRegisterScreen> {
                     decoration: _inputDeco('Min 6 characters').copyWith(
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscure ? Icons.visibility_off : Icons.visibility,
+                          _obscure
+                              ? Icons.visibility_off_rounded
+                              : Icons.visibility_rounded,
                           color: Colors.white54,
                         ),
                         onPressed: () => setState(() => _obscure = !_obscure),

@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import 'game_common.dart';
 
 /// RGB MASTER — match a target color by dragging R/G/B sliders. 3 rounds;
@@ -124,7 +125,7 @@ class _RgbMasterScreenState extends State<RgbMasterScreen> {
     }
     showGameResultDialog(
       context,
-      emoji: _totalScore >= 250 ? '🎨' : '🖌️',
+      icon: _totalScore >= 250 ? Icons.palette_rounded : Icons.brush_rounded,
       title: 'Palette Complete!',
       message: 'Total score across $_totalRounds rounds: $_totalScore points.',
       color: widget.accentColor,
@@ -135,10 +136,12 @@ class _RgbMasterScreenState extends State<RgbMasterScreen> {
   @override
   Widget build(BuildContext context) {
     final color = widget.accentColor;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     final current = Color.fromARGB(255, _r.round(), _g.round(), _b.round());
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: gameAppBar(widget.title, color),
       body: !_started && !_gameOver
           ? Center(
@@ -147,13 +150,13 @@ class _RgbMasterScreenState extends State<RgbMasterScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('🎨', style: TextStyle(fontSize: 64)),
+                    Icon(Icons.palette_rounded, size: 64, color: color),
                     const SizedBox(height: 12),
-                    const Text('Match the target color using the sliders.',
+                    Text('Match the target color using the sliders.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textMedium)),
+                            color: palette.textMedium)),
                     const SizedBox(height: 20),
                     ElevatedButton(
                       onPressed: _start,
@@ -194,16 +197,27 @@ class _RgbMasterScreenState extends State<RgbMasterScreen> {
                             horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
                           color: _secondsLeft <= 5
-                              ? AppColors.danger.withOpacity(0.15)
-                              : AppColors.cardBg,
+                              ? palette.danger.withOpacity(0.15)
+                              : palette.cardBg,
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: Text('⏱ ${_secondsLeft}s',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w800,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.timer_outlined,
+                                size: 15,
                                 color: _secondsLeft <= 5
-                                    ? AppColors.danger
-                                    : AppColors.textMedium)),
+                                    ? palette.danger
+                                    : palette.textMedium),
+                            const SizedBox(width: 4),
+                            Text('${_secondsLeft}s',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: _secondsLeft <= 5
+                                        ? palette.danger
+                                        : palette.textMedium)),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -213,17 +227,18 @@ class _RgbMasterScreenState extends State<RgbMasterScreen> {
                       Expanded(
                         child: Column(
                           children: [
-                            const Text('Target',
+                            Text('Target',
                                 style: TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.textMedium)),
+                                    color: palette.textMedium)),
                             const SizedBox(height: 8),
                             Container(
                               height: 90,
                               decoration: BoxDecoration(
                                 color: _target,
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.grey.shade300),
+                                border: Border.all(
+                                    color: theme.colorScheme.outlineVariant),
                               ),
                             ),
                           ],
@@ -233,17 +248,18 @@ class _RgbMasterScreenState extends State<RgbMasterScreen> {
                       Expanded(
                         child: Column(
                           children: [
-                            const Text('Your Mix',
+                            Text('Your Mix',
                                 style: TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.textMedium)),
+                                    color: palette.textMedium)),
                             const SizedBox(height: 8),
                             Container(
                               height: 90,
                               decoration: BoxDecoration(
                                 color: current,
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.grey.shade300),
+                                border: Border.all(
+                                    color: theme.colorScheme.outlineVariant),
                               ),
                             ),
                           ],
@@ -341,7 +357,10 @@ class _ColorSlider extends StatelessWidget {
             width: 34,
             child: Text('${value.round()}',
                 textAlign: TextAlign.end,
-                style: const TextStyle(color: AppColors.textMedium))),
+                style: TextStyle(
+                    color: Theme.of(context)
+                        .extension<AppPalette>()!
+                        .textMedium))),
       ],
     );
   }

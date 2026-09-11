@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
 import '../../core/models/lucky_draw_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 import '../../shared/widgets/fun_button.dart';
 
 class ManageLuckyDrawScreen extends StatefulWidget {
@@ -26,6 +26,7 @@ class _ManageLuckyDrawScreenState extends State<ManageLuckyDrawScreen> {
   }
 
   void _confirmDelete(LuckyDrawModel draw) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -40,8 +41,7 @@ class _ManageLuckyDrawScreenState extends State<ManageLuckyDrawScreen> {
               Navigator.pop(context);
               await _fs.deleteLuckyDraw(draw.id);
             },
-            child:
-                const Text('Delete', style: TextStyle(color: AppColors.danger)),
+            child: Text('Delete', style: TextStyle(color: palette.danger)),
           ),
         ],
       ),
@@ -50,17 +50,19 @@ class _ManageLuckyDrawScreenState extends State<ManageLuckyDrawScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Lucky Draws 🎰',
+        title: const Text('Lucky Draws',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.luckyDrawColor,
+        backgroundColor: palette.luckyDrawColor,
         foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showDrawDialog(),
-        backgroundColor: AppColors.luckyDrawColor,
+        backgroundColor: palette.luckyDrawColor,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_rounded),
         label: const Text('New Draw',
@@ -78,7 +80,8 @@ class _ManageLuckyDrawScreenState extends State<ManageLuckyDrawScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('🎰', style: TextStyle(fontSize: 64)),
+                  Icon(Icons.casino_rounded,
+                      size: 64, color: palette.luckyDrawColor),
                   const SizedBox(height: 12),
                   const Text('No draws yet.',
                       style: TextStyle(
@@ -87,7 +90,7 @@ class _ManageLuckyDrawScreenState extends State<ManageLuckyDrawScreen> {
                   FunButton(
                     label: 'Create Draw',
                     onPressed: () => _showDrawDialog(),
-                    gradient: AppColors.primaryGradient,
+                    gradient: palette.primaryGradient,
                   ),
                 ],
               ),
@@ -202,7 +205,18 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
     if (mounted) {
       final name = await widget.fs.getUserDisplayName(winnerUid);
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('🏆 Winner: $name')));
+        SnackBar(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.emoji_events_rounded,
+                  color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Text('Winner: $name'),
+            ],
+          ),
+        ),
+      );
       setState(() => _winnerName = name);
     }
   }
@@ -210,7 +224,9 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
   @override
   Widget build(BuildContext context) {
     final d = widget.draw;
-    final color = AppColors.luckyDrawColor;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
+    final color = palette.luckyDrawColor;
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 2,
@@ -226,8 +242,7 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
                   decoration: BoxDecoration(
                       color: color.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.casino_rounded,
-                      color: AppColors.luckyDrawColor),
+                  child: Icon(Icons.casino_rounded, color: color),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -237,9 +252,16 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
                       Text(d.title,
                           style: const TextStyle(
                               fontWeight: FontWeight.w800, fontSize: 15)),
-                      Text('🎁 ${d.prize}',
-                          style: const TextStyle(
-                              color: AppColors.textMedium, fontSize: 13)),
+                      Row(
+                        children: [
+                          Icon(Icons.card_giftcard_rounded,
+                              size: 13, color: palette.textMedium),
+                          const SizedBox(width: 4),
+                          Text(d.prize,
+                              style: TextStyle(
+                                  color: palette.textMedium, fontSize: 13)),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -248,30 +270,33 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: d.isActive
-                        ? AppColors.success.withOpacity(0.15)
+                        ? palette.success.withOpacity(0.15)
                         : Colors.grey.shade200,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(d.isActive ? 'Active' : 'Closed',
                       style: TextStyle(
-                          color: d.isActive
-                              ? AppColors.success
-                              : AppColors.textMedium,
+                          color:
+                              d.isActive ? palette.success : palette.textMedium,
                           fontWeight: FontWeight.w700,
                           fontSize: 12)),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            Text('👥 ${d.participants.length} participants',
-                style: const TextStyle(
-                    color: AppColors.textMedium, fontSize: 13)),
+            Row(
+              children: [
+                Icon(Icons.groups_rounded, size: 13, color: palette.textMedium),
+                const SizedBox(width: 4),
+                Text('${d.participants.length} participants',
+                    style: TextStyle(color: palette.textMedium, fontSize: 13)),
+              ],
+            ),
             if (d.endsAt != null) ...[
               const SizedBox(height: 6),
               Row(
                 children: [
-                  const Icon(Icons.timer_outlined,
-                      size: 14, color: AppColors.textMedium),
+                  Icon(Icons.timer_outlined, size: 14, color: palette.textMedium),
                   const SizedBox(width: 4),
                   Text(
                     d.hasEnded
@@ -279,8 +304,8 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
                         : 'Closes in ${_fmt(_remaining)}',
                     style: TextStyle(
                         color: d.hasEnded
-                            ? AppColors.textMedium
-                            : AppColors.warning,
+                            ? palette.textMedium
+                            : palette.warning,
                         fontSize: 13,
                         fontWeight: FontWeight.w600),
                   ),
@@ -289,11 +314,18 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
             ],
             if (d.winnerUid != null) ...[
               const SizedBox(height: 6),
-              Text('🏆 Winner: ${_winnerName ?? "Loading..."}',
-                  style: const TextStyle(
-                      color: AppColors.warning,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13)),
+              Row(
+                children: [
+                  Icon(Icons.emoji_events_rounded,
+                      size: 14, color: palette.warning),
+                  const SizedBox(width: 4),
+                  Text('Winner: ${_winnerName ?? "Loading..."}',
+                      style: TextStyle(
+                          color: palette.warning,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13)),
+                ],
+              ),
             ],
             const SizedBox(height: 12),
             Row(
@@ -305,8 +337,8 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
                       icon: const Icon(Icons.emoji_events_rounded, size: 16),
                       label: const Text('Draw Winner'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accent,
-                        foregroundColor: AppColors.textDark,
+                        backgroundColor: palette.gold,
+                        foregroundColor: palette.textDark,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
@@ -315,13 +347,13 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
                 if (d.isActive && d.winnerUid == null)
                   const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined,
-                      color: AppColors.textMedium, size: 20),
+                  icon: Icon(Icons.edit_outlined,
+                      color: palette.textMedium, size: 20),
                   onPressed: widget.onEdit,
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline,
-                      color: AppColors.danger, size: 20),
+                  icon: Icon(Icons.delete_outline,
+                      color: palette.danger, size: 20),
                   onPressed: widget.onDelete,
                 ),
               ],
@@ -403,8 +435,9 @@ class _DrawFormDialogState extends State<_DrawFormDialog> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return AlertDialog(
-      title: Text(isEdit ? 'Edit Draw' : 'Create Lucky Draw 🎰',
+      title: Text(isEdit ? 'Edit Draw' : 'Create Lucky Draw',
           style: const TextStyle(fontWeight: FontWeight.w800)),
       content: SizedBox(
         width: double.maxFinite,
@@ -449,8 +482,7 @@ class _DrawFormDialogState extends State<_DrawFormDialog> {
             child: const Text('Cancel')),
         FilledButton(
           onPressed: _saving ? null : _save,
-          style: FilledButton.styleFrom(
-              backgroundColor: AppColors.luckyDrawColor),
+          style: FilledButton.styleFrom(backgroundColor: palette.luckyDrawColor),
           child: _saving
               ? const SizedBox(
                   width: 18, height: 18,

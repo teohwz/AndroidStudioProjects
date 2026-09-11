@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import 'game_common.dart';
 
 /// REFLEX TAP — a single tile lights up in a grid; tap it before it fades.
@@ -134,7 +135,7 @@ class _ReflexTapScreenState extends State<ReflexTapScreen> {
     }
     showGameResultDialog(
       context,
-      emoji: _score >= 150 ? '⚡' : '🎯',
+      icon: _score >= 150 ? Icons.bolt_rounded : Icons.adjust_rounded,
       title: 'Round Over!',
       message: 'You scored $_score points.',
       color: widget.accentColor,
@@ -145,8 +146,9 @@ class _ReflexTapScreenState extends State<ReflexTapScreen> {
   @override
   Widget build(BuildContext context) {
     final color = widget.accentColor;
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: gameAppBar(widget.title, color),
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -176,13 +178,13 @@ class _ReflexTapScreenState extends State<ReflexTapScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('⚡', style: TextStyle(fontSize: 64)),
+                      Icon(Icons.bolt_rounded, size: 64, color: color),
                       const SizedBox(height: 12),
-                      const Text('Tap the lit tile before it fades!',
+                      Text('Tap the lit tile before it fades!',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: AppColors.textMedium)),
+                              color: palette.textMedium)),
                       const SizedBox(height: 20),
                       ElevatedButton(
                         onPressed: _start,

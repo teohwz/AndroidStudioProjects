@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/services/firestore_service.dart';
 import 'game_common.dart';
 
@@ -155,7 +156,7 @@ class _MemoryMatrixScreenState extends State<MemoryMatrixScreen> {
     }
     showGameResultDialog(
       context,
-      emoji: _moves <= _pairCount + 2 ? '🏆' : '🃏',
+      icon: _moves <= _pairCount + 2 ? Icons.emoji_events_rounded : Icons.style_rounded,
       title: 'All Matched!',
       message: 'You found all $_pairCount pairs in $_moves moves — $score points.',
       color: widget.accentColor,
@@ -166,8 +167,10 @@ class _MemoryMatrixScreenState extends State<MemoryMatrixScreen> {
   @override
   Widget build(BuildContext context) {
     final color = widget.accentColor;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: gameAppBar(widget.title, color),
       body: _loadingContent
           ? const Center(child: CircularProgressIndicator())
@@ -191,15 +194,15 @@ class _MemoryMatrixScreenState extends State<MemoryMatrixScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('🃏', style: TextStyle(fontSize: 64)),
+                            Icon(Icons.style_rounded, size: 64, color: color),
                             const SizedBox(height: 12),
                             Text(
                                 'Flip two cards at a time and find all '
                                 '$_pairCount matching pairs.',
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.textMedium)),
+                                    color: palette.textMedium)),
                             const SizedBox(height: 20),
                             ElevatedButton(
                               onPressed: _start,
@@ -235,14 +238,14 @@ class _MemoryMatrixScreenState extends State<MemoryMatrixScreen> {
                               duration: const Duration(milliseconds: 180),
                               decoration: BoxDecoration(
                                 color: _matched[i]
-                                    ? AppColors.success.withOpacity(0.18)
+                                    ? palette.success.withOpacity(0.18)
                                     : revealed
-                                        ? Colors.white
+                                        ? theme.colorScheme.surface
                                         : color,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                     color: _matched[i]
-                                        ? AppColors.success
+                                        ? palette.success
                                         : color.withOpacity(0.3)),
                               ),
                               alignment: Alignment.center,
@@ -280,6 +283,7 @@ class _StatusRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -293,8 +297,8 @@ class _StatusRow extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.w800, color: color)),
         ),
         Text(status,
-            style: const TextStyle(
-                fontWeight: FontWeight.w700, color: AppColors.textMedium)),
+            style: TextStyle(
+                fontWeight: FontWeight.w700, color: palette.textMedium)),
       ],
     );
   }

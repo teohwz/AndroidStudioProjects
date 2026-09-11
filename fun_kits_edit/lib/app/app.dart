@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../core/constants/app_colors.dart';
 import '../core/services/auth_service.dart';
 import '../core/services/firestore_service.dart';
+import '../core/theme/app_theme.dart';
 import '../features/home/home_screen.dart';
 import '../features/admin/super_admin_dashboard_screen.dart';
 import '../features/exhibitor/exhibitor_dashboard_screen.dart';
@@ -21,11 +22,9 @@ class FunKitsApp extends StatelessWidget {
     return MaterialApp(
       title: 'Fun Kits',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
-        fontFamily: 'Nunito',
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
       routes: AppRoutes.routes,
       // Entry flow: the very first launch ever (no session, nothing
       // persisted) shows RoleChoiceScreen — "I am an Exhibitor" / "I am a

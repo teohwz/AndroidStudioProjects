@@ -12,6 +12,11 @@ import '../../core/models/exhibitor_model.dart';
 import '../../core/models/quiz_model.dart';
 import '../../core/models/lucky_draw_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../shared/widgets/icon_badge.dart';
+import '../../shared/widgets/action_list_row.dart';
+import '../../shared/widgets/checkable_task_row.dart';
+import '../../shared/widgets/section_header.dart';
+import '../../shared/widgets/points_pill.dart';
 import '../quiz/quiz_screen.dart';
 import '../lucky_draw/lucky_draw_screen.dart';
 import '../puzzle/puzzle_screen.dart';
@@ -73,7 +78,12 @@ class _BoothScreenState extends State<BoothScreen> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('✅ Checked in! +1 attempt earned at this booth.')));
+              content: Row(children: [
+            Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Expanded(
+                child: Text('Checked in! +1 attempt earned at this booth.')),
+          ])));
         });
       }
     } catch (_) {
@@ -122,13 +132,17 @@ class _BoothScreenState extends State<BoothScreen> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 190,
+            expandedHeight: 214,
             pinned: true,
             backgroundColor: color,
             foregroundColor: Colors.white,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
                   image: ex.hasBanner
                       ? DecorationImage(
                           image: CachedNetworkImageProvider(ex.bannerImageUrl),
@@ -158,7 +172,7 @@ class _BoothScreenState extends State<BoothScreen> {
                           height: 56,
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(18),
                           ),
                           clipBehavior: Clip.antiAlias,
                           child: ex.logoUrl.isNotEmpty
@@ -192,6 +206,25 @@ class _BoothScreenState extends State<BoothScreen> {
                         ),
                       ],
                     ),
+                    if (uid != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: StreamBuilder<BoothAttemptPool>(
+                          stream: _fs.watchAttemptPool(uid, ex.id),
+                          builder: (context, snap) {
+                            final remaining = snap.data?.attemptsRemaining;
+                            if (remaining == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return PointsPill(
+                              label: remaining == 1
+                                  ? '1 attempt left'
+                                  : '$remaining attempts left',
+                              icon: Icons.confirmation_number_rounded,
+                            );
+                          },
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -278,12 +311,8 @@ class _BoothScreenState extends State<BoothScreen> {
                           .toList(),
                     ),
                   const SizedBox(height: 20),
-                  Text('⚡ Instant Challenges',
-                      style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textDark)),
-                  const SizedBox(height: 4),
+                  const SectionHeader('Instant Challenges',
+                      padding: EdgeInsets.only(bottom: 4)),
                   const Text('No setup needed — jump straight in, themed for this booth.',
                       style: TextStyle(fontSize: 12, color: AppColors.textMedium)),
                   const SizedBox(height: 12),
@@ -322,7 +351,7 @@ class _BoothScreenState extends State<BoothScreen> {
                       final d = defs[i];
                       final points = ex.configFor(d.gameType).points;
                       return _ChallengeTile(
-                        emoji: d.emoji,
+                        icon: d.icon,
                         title: d.title,
                         color: color,
                         points: points,
@@ -338,7 +367,7 @@ class _BoothScreenState extends State<BoothScreen> {
               );
             },
           ),
-          // 🎯 Booth Tasks — earn up to 2 more shared attempts at this
+          // Booth Tasks — earn up to 2 more shared attempts at this
           // booth: +1 for following the exhibitor (any one of Facebook/
           // Instagram/Website), +1 for finishing a round of either of the
           // 2 mini-games named below (see _assignMinigameTasks). Hidden
@@ -363,12 +392,8 @@ class _BoothScreenState extends State<BoothScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('🎯 Booth Tasks',
-                            style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.textDark)),
-                        const SizedBox(height: 4),
+                        const SectionHeader('Booth Tasks',
+                            padding: EdgeInsets.only(bottom: 4)),
                         const Text(
                             'Complete these to earn extra attempts at this booth.',
                             style: TextStyle(
@@ -410,21 +435,21 @@ class _BoothScreenState extends State<BoothScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('🧠 Quizzes',
-                          style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textDark)),
-                      const SizedBox(height: 10),
-                      ...quizzes.map((q) => _GameTile(
-                            icon: Icons.quiz_rounded,
-                            color: AppColors.quizColor,
-                            title: q.title,
-                            subtitle: '${q.questionCount} questions · ${q.timeLimitSeconds}s each',
-                            onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => QuizScreen(initialQuiz: q))),
+                      const SectionHeader('Quizzes',
+                          padding: EdgeInsets.only(bottom: 10)),
+                      ...quizzes.map((q) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: ActionListRow(
+                              icon: Icons.quiz_rounded,
+                              color: AppColors.quizColor,
+                              label: q.title,
+                              subtitle:
+                                  '${q.questionCount} questions · ${q.timeLimitSeconds}s each',
+                              onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => QuizScreen(initialQuiz: q))),
+                            ),
                           )),
                     ],
                   ),
@@ -444,21 +469,22 @@ class _BoothScreenState extends State<BoothScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('🎰 Lucky Draws',
-                          style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textDark)),
-                      const SizedBox(height: 10),
-                      ...draws.map((d) => _GameTile(
-                            icon: Icons.casino_rounded,
-                            color: AppColors.luckyDrawColor,
-                            title: d.title,
-                            subtitle: d.prize.isNotEmpty ? '🎁 ${d.prize}' : 'Lucky draw',
-                            onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => LuckyDrawScreen(exhibitorId: ex.id))),
+                      const SectionHeader('Lucky Draws',
+                          padding: EdgeInsets.only(bottom: 10)),
+                      ...draws.map((d) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: ActionListRow(
+                              icon: Icons.casino_rounded,
+                              color: AppColors.luckyDrawColor,
+                              label: d.title,
+                              subtitle:
+                                  d.prize.isNotEmpty ? d.prize : 'Lucky draw',
+                              onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          LuckyDrawScreen(exhibitorId: ex.id))),
+                            ),
                           )),
                     ],
                   ),
@@ -483,16 +509,12 @@ class _BoothScreenState extends State<BoothScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('🎡 Spin Wheel',
-                          style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textDark)),
-                      const SizedBox(height: 10),
-                      _GameTile(
-                        icon: Icons.casino_rounded,
+                      const SectionHeader('Spin Wheel',
+                          padding: EdgeInsets.only(bottom: 10)),
+                      ActionListRow(
+                        icon: Icons.autorenew_rounded,
                         color: AppColors.spinWheelColor,
-                        title: 'Spin to Win',
+                        label: 'Spin to Win',
                         subtitle: '${config.segments.length} prizes up for grabs',
                         onTap: () => Navigator.push(
                             context,
@@ -520,16 +542,12 @@ class _BoothScreenState extends State<BoothScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('🪙 Scratch Card',
-                          style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textDark)),
-                      const SizedBox(height: 10),
-                      _GameTile(
-                        icon: Icons.card_giftcard_rounded,
+                      const SectionHeader('Scratch Card',
+                          padding: EdgeInsets.only(bottom: 10)),
+                      ActionListRow(
+                        icon: Icons.layers_rounded,
                         color: AppColors.scratchCardColor,
-                        title: 'Scratch & Win',
+                        label: 'Scratch & Win',
                         subtitle: config.revealMessage,
                         onTap: () => Navigator.push(
                             context,
@@ -557,16 +575,12 @@ class _BoothScreenState extends State<BoothScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('🔢 Guess the Number',
-                          style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textDark)),
-                      const SizedBox(height: 10),
-                      _GameTile(
+                      const SectionHeader('Guess the Number',
+                          padding: EdgeInsets.only(bottom: 10)),
+                      ActionListRow(
                         icon: Icons.pin_rounded,
                         color: AppColors.guessNumberColor,
-                        title: 'Guess the Number',
+                        label: 'Guess the Number',
                         subtitle:
                             '${config.minValue}–${config.maxValue} · +${config.rewardPoints} points',
                         onTap: () => Navigator.push(
@@ -625,9 +639,9 @@ class _BoothScreenState extends State<BoothScreen> {
 /// with a builder that constructs the actual game screen once the visitor
 /// taps in, themed with the booth's accent color.
 class _GameDef {
-  const _GameDef(this.gameType, this.emoji, this.title, this.builder);
+  const _GameDef(this.gameType, this.icon, this.title, this.builder);
   final String gameType;
-  final String emoji;
+  final IconData icon;
   final String title;
   final Widget Function(Color accent) builder;
 }
@@ -635,25 +649,26 @@ class _GameDef {
 /// All 6 generic booth games (unfiltered by whether this booth has them
 /// enabled) — shared by the Instant Challenges grid (filtered to enabled
 /// games) and the Booth Tasks mini-game card (filtered to
-/// BoothAttemptPool.taskGameKeys).
+/// BoothAttemptPool.taskGameKeys). Icons mirror game_types.dart's registry
+/// so the same game always reads the same icon everywhere in the app.
 List<_GameDef> _genericGameDefs(String exId) => [
-      _GameDef('reflex_tap', '⚡', 'Reflex Tap',
+      _GameDef('reflex_tap', Icons.bolt_rounded, 'Reflex Tap',
           (accent) => ReflexTapScreen(accentColor: accent, exhibitorId: exId)),
-      _GameDef('memory_matrix', '🃏', 'Memory Cards',
+      _GameDef('memory_matrix', Icons.style_rounded, 'Memory Cards',
           (accent) => MemoryMatrixScreen(accentColor: accent, exhibitorId: exId)),
-      _GameDef('code_breaker', '🔐', 'Code Breaker',
+      _GameDef('code_breaker', Icons.lock_rounded, 'Code Breaker',
           (accent) => CodeBreakerScreen(accentColor: accent, exhibitorId: exId)),
-      _GameDef('rgb_master', '🎨', 'RGB Master',
+      _GameDef('rgb_master', Icons.palette_rounded, 'RGB Master',
           (accent) => RgbMasterScreen(accentColor: accent, exhibitorId: exId)),
-      _GameDef('speed_typing', '⌨️', 'Speed Typing',
+      _GameDef('speed_typing', Icons.keyboard_rounded, 'Speed Typing',
           (accent) => SpeedTypingScreen(accentColor: accent, exhibitorId: exId)),
-      _GameDef('puzzle', '🧩', 'Slide Puzzle',
+      _GameDef('puzzle', Icons.extension_rounded, 'Slide Puzzle',
           (accent) => PuzzleScreen(exhibitorId: exId)),
     ];
 
 class _ChallengeTile extends StatefulWidget {
   const _ChallengeTile({
-    required this.emoji,
+    required this.icon,
     required this.title,
     required this.color,
     required this.points,
@@ -661,7 +676,7 @@ class _ChallengeTile extends StatefulWidget {
     this.remaining,
   });
 
-  final String emoji;
+  final IconData icon;
   final String title;
   final Color color;
   final int points;
@@ -712,7 +727,7 @@ class _ChallengeTileState extends State<_ChallengeTile> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(widget.emoji, style: const TextStyle(fontSize: 26)),
+                  IconBadge(icon: widget.icon, color: widget.color, size: 40),
                   if (remaining != null)
                     Icon(
                       locked ? Icons.lock_rounded : Icons.play_circle_fill_rounded,
@@ -739,46 +754,6 @@ class _ChallengeTileState extends State<_ChallengeTile> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _GameTile extends StatelessWidget {
-  const _GameTile({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      elevation: 1.5,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12)),
-          child: Icon(icon, color: color),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-        onTap: onTap,
       ),
     );
   }
@@ -853,30 +828,17 @@ class _FollowTaskCard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            earned
-                ? 'Earned +1 attempt ✅'
-                : 'Tap any one below to earn +1 attempt',
+            earned ? 'Earned +1 attempt' : 'Tap any one below to earn +1 attempt',
             style: const TextStyle(fontSize: 11.5, color: AppColors.textMedium),
           ),
           const SizedBox(height: 8),
-          ...links.map((l) => InkWell(
-                onTap: () => onTapLink(l.$3),
-                borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      Icon(l.$1, size: 18, color: color),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text('Earn 1 attempt when you visit our ${l.$2}',
-                            style: const TextStyle(
-                                fontSize: 12.5, fontWeight: FontWeight.w600)),
-                      ),
-                      const Icon(Icons.open_in_new_rounded,
-                          size: 14, color: AppColors.textMedium),
-                    ],
-                  ),
+          ...links.map((l) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: CheckableTaskRow(
+                  icon: l.$1,
+                  label: 'Visit our ${l.$2}',
+                  earned: earned,
+                  onTap: () => onTapLink(l.$3),
                 ),
               )),
         ],
@@ -929,29 +891,18 @@ class _MinigameTaskCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             earned
-                ? 'Earned +1 attempt ✅'
+                ? 'Earned +1 attempt'
                 : 'Finish either round below to earn +1 attempt',
             style: const TextStyle(fontSize: 11.5, color: AppColors.textMedium),
           ),
           const SizedBox(height: 8),
-          ...defs.map((d) => InkWell(
-                onTap: () => onPlay(d),
-                borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      Text(d.emoji, style: const TextStyle(fontSize: 18)),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text('Play the mini-game (${d.title})',
-                            style: const TextStyle(
-                                fontSize: 12.5, fontWeight: FontWeight.w600)),
-                      ),
-                      const Icon(Icons.arrow_forward_ios_rounded,
-                          size: 12, color: AppColors.textMedium),
-                    ],
-                  ),
+          ...defs.map((d) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: CheckableTaskRow(
+                  icon: d.icon,
+                  label: 'Play the mini-game (${d.title})',
+                  earned: earned,
+                  onTap: () => onPlay(d),
                 ),
               )),
         ],

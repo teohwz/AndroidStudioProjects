@@ -5,6 +5,7 @@ import 'package:confetti/confetti.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../../shared/widgets/recent_winners_list.dart';
@@ -94,12 +95,13 @@ class _ScratchCardScreenState extends State<ScratchCardScreen> {
           builder: (ctx) => AlertDialog(
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            content: const Column(
+            content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('😅', style: TextStyle(fontSize: 48)),
-                SizedBox(height: 8),
-                Text('All out of prizes right now — check back later!',
+                Icon(Icons.sentiment_dissatisfied_rounded,
+                    size: 48, color: widget.accentColor),
+                const SizedBox(height: 8),
+                const Text('All out of prizes right now — check back later!',
                     textAlign: TextAlign.center),
               ],
             ),
@@ -133,7 +135,7 @@ class _ScratchCardScreenState extends State<ScratchCardScreen> {
       final won = _won!;
       showGameResultDialog(
         context,
-        emoji: won.isPoints ? '⭐' : '🎁',
+        icon: won.isPoints ? Icons.star_rounded : Icons.card_giftcard_rounded,
         title: won.isPoints ? 'You Won!' : 'You Won a Prize!',
         message: won.isPoints
             ? '+${won.pointsValue} points!'
@@ -147,11 +149,13 @@ class _ScratchCardScreenState extends State<ScratchCardScreen> {
   @override
   Widget build(BuildContext context) {
     final color = widget.accentColor;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     final config = _config;
     final hasPrizes = config != null && config.hasAvailablePrize;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: gameAppBar(widget.title, color),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -160,13 +164,13 @@ class _ScratchCardScreenState extends State<ScratchCardScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('🪙', style: TextStyle(fontSize: 64)),
+                      Icon(Icons.layers_rounded, size: 64, color: color),
                       const SizedBox(height: 12),
-                      const Text('This booth hasn\'t set up any prizes yet.',
+                      Text('This booth hasn\'t set up any prizes yet.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: AppColors.textMedium)),
+                              color: palette.textMedium)),
                     ],
                   ),
                 )
@@ -219,17 +223,25 @@ class _ScratchCardScreenState extends State<ScratchCardScreen> {
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16)),
                                 ),
-                                child: const Text('TAP TO PLAY 🪙',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 16)),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.touch_app_rounded, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('TAP TO PLAY',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 16)),
+                                  ],
+                                ),
                               ),
                             )
                           else if (_phase == 'revealing')
-                            const Text('Scratch the card to reveal your prize!',
+                            Text('Scratch the card to reveal your prize!',
                                 style: TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.textMedium)),
+                                    color: palette.textMedium)),
                           RecentWinnersList(
                               boothId: widget.exhibitorId, color: color),
                         ],
@@ -242,7 +254,7 @@ class _ScratchCardScreenState extends State<ScratchCardScreen> {
                         blastDirectionality: BlastDirectionality.explosive,
                         shouldLoop: false,
                         numberOfParticles: 30,
-                        colors: [color, AppColors.accent, AppColors.success],
+                        colors: [color, palette.gold, palette.success],
                       ),
                     ),
                   ],
@@ -275,7 +287,8 @@ class _CardBack extends StatelessWidget {
           : const Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('🎫', style: TextStyle(fontSize: 56)),
+                Icon(Icons.confirmation_number_rounded,
+                    size: 56, color: Colors.white),
                 SizedBox(height: 8),
                 Text('Mystery Card',
                     style: TextStyle(
@@ -297,8 +310,9 @@ class _RevealContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return Container(
-      decoration: BoxDecoration(color: AppColors.cardBg),
+      decoration: BoxDecoration(color: palette.cardBg),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -309,8 +323,8 @@ class _RevealContent extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(won.isPoints ? '⭐' : '🎁',
-                    style: const TextStyle(fontSize: 40)),
+                Icon(won.isPoints ? Icons.star_rounded : Icons.card_giftcard_rounded,
+                    size: 40, color: Colors.white),
                 const SizedBox(height: 6),
                 Text(
                   won.isPoints ? '+${won.pointsValue} points' : won.label,

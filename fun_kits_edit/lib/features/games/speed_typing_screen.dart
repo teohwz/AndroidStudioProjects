@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import 'game_common.dart';
 
 const _phraseBank = [
@@ -121,7 +122,7 @@ class _SpeedTypingScreenState extends State<SpeedTypingScreen> {
     }
     showGameResultDialog(
       context,
-      emoji: accuracy >= 0.95 ? '⌨️' : '📝',
+      icon: accuracy >= 0.95 ? Icons.keyboard_rounded : Icons.edit_note_rounded,
       title: 'Time!',
       message: '${wpm.round()} WPM · ${(accuracy * 100).round()}% accurate '
           '— $score points.',
@@ -133,10 +134,12 @@ class _SpeedTypingScreenState extends State<SpeedTypingScreen> {
   @override
   Widget build(BuildContext context) {
     final color = widget.accentColor;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     final typed = _ctrl.text;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: gameAppBar(widget.title, color),
       body: !_started && !_gameOver
           ? Center(
@@ -145,13 +148,13 @@ class _SpeedTypingScreenState extends State<SpeedTypingScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('⌨️', style: TextStyle(fontSize: 64)),
+                    Icon(Icons.keyboard_rounded, size: 64, color: color),
                     const SizedBox(height: 12),
-                    const Text('Retype the phrase as fast and accurately as you can.',
+                    Text('Retype the phrase as fast and accurately as you can.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textMedium)),
+                            color: palette.textMedium)),
                     const SizedBox(height: 20),
                     ElevatedButton(
                       onPressed: _start,
@@ -180,14 +183,24 @@ class _SpeedTypingScreenState extends State<SpeedTypingScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
                         color: _secondsLeft <= 8
-                            ? AppColors.danger.withOpacity(0.15)
+                            ? palette.danger.withOpacity(0.15)
                             : color.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text('⏱ ${_secondsLeft}s',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color: _secondsLeft <= 8 ? AppColors.danger : color)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.timer_outlined,
+                              size: 15,
+                              color: _secondsLeft <= 8 ? palette.danger : color),
+                          const SizedBox(width: 4),
+                          Text('${_secondsLeft}s',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color:
+                                      _secondsLeft <= 8 ? palette.danger : color)),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -195,20 +208,20 @@ class _SpeedTypingScreenState extends State<SpeedTypingScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: theme.colorScheme.surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200),
+                      border: Border.all(color: theme.colorScheme.outlineVariant),
                     ),
                     child: RichText(
                       text: TextSpan(
                         style: const TextStyle(
                             fontSize: 18, fontWeight: FontWeight.w600, height: 1.4),
                         children: List.generate(_phrase.length, (i) {
-                          Color c = AppColors.textMedium;
+                          Color c = palette.textMedium;
                           if (i < typed.length) {
                             c = typed[i] == _phrase[i]
-                                ? AppColors.success
-                                : AppColors.danger;
+                                ? palette.success
+                                : palette.danger;
                           }
                           return TextSpan(
                             text: _phrase[i],
@@ -228,7 +241,7 @@ class _SpeedTypingScreenState extends State<SpeedTypingScreen> {
                     decoration: InputDecoration(
                       hintText: 'Start typing...',
                       filled: true,
-                      fillColor: AppColors.cardBg,
+                      fillColor: palette.cardBg,
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide.none),

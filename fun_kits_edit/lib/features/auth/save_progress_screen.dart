@@ -2,8 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/services/firestore_service.dart';
+import '../../shared/widgets/fun_button.dart';
 import 'visitor_register_screen.dart';
 
 /// The in-context "protect what you've already earned" prompt — reached
@@ -25,16 +26,17 @@ class SaveProgressScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final fs = FirestoreService();
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Save My Points',
-            style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text('Save My Points'),
         backgroundColor: Colors.transparent,
-        foregroundColor: AppColors.textDark,
+        foregroundColor: palette.textDark,
         elevation: 0,
       ),
       body: SafeArea(
@@ -53,18 +55,29 @@ class SaveProgressScreen extends StatelessWidget {
                   return Container(
                     padding: const EdgeInsets.all(22),
                     decoration: BoxDecoration(
-                      gradient: AppColors.secondaryGradient,
+                      gradient: palette.secondaryGradient,
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                            color: AppColors.secondary.withOpacity(0.3),
+                            color: palette.secondaryGradient.colors.first
+                                .withOpacity(0.3),
                             blurRadius: 16,
                             offset: const Offset(0, 8)),
                       ],
                     ),
                     child: Row(
                       children: [
-                        const Text('🔒', style: TextStyle(fontSize: 36)),
+                        Container(
+                          width: 52,
+                          height: 52,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.22),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(Icons.lock_rounded,
+                              color: Colors.white, size: 28),
+                        ),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Column(
@@ -91,29 +104,21 @@ class SaveProgressScreen extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               const _BenefitRow(
-                  emoji: '🏆',
+                  icon: Icons.leaderboard_rounded,
                   text: 'Officially join the leaderboard rankings'),
               const SizedBox(height: 10),
               const _BenefitRow(
-                  emoji: '🎁',
+                  icon: Icons.card_giftcard_rounded,
                   text: "Redeem rewards without losing your balance"),
               const SizedBox(height: 10),
               const _BenefitRow(
-                  emoji: '📱',
+                  icon: Icons.smartphone_rounded,
                   text: 'Sign back in on any device to keep playing'),
               const SizedBox(height: 26),
-              ElevatedButton(
+              FunButton(
+                label: 'Register',
                 onPressed: () => _register(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.secondary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('Register',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                gradient: palette.secondaryGradient,
               ),
             ],
           ),
@@ -124,22 +129,22 @@ class SaveProgressScreen extends StatelessWidget {
 }
 
 class _BenefitRow extends StatelessWidget {
-  const _BenefitRow({required this.emoji, required this.text});
-  final String emoji;
+  const _BenefitRow({required this.icon, required this.text});
+  final IconData icon;
   final String text;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Row(
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 18)),
+        Icon(icon, size: 20, color: palette.textDark),
         const SizedBox(width: 10),
         Expanded(
           child: Text(text,
-              style: const TextStyle(
-                  color: AppColors.textDark,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600)),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                  color: palette.textDark, fontWeight: FontWeight.w600)),
         ),
       ],
     );

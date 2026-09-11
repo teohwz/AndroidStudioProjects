@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import 'game_common.dart';
 
 class _Guess {
@@ -125,7 +126,7 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
     }
     showGameResultDialog(
       context,
-      emoji: solved ? '🔓' : '⏰',
+      icon: solved ? Icons.lock_open_rounded : Icons.timer_off_rounded,
       title: solved ? 'Code Cracked!' : "Time's Up!",
       message: solved
           ? 'Solved in ${_guesses.length} guess${_guesses.length == 1 ? '' : 'es'} — $score points.'
@@ -138,8 +139,10 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
   @override
   Widget build(BuildContext context) {
     final color = widget.accentColor;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: gameAppBar(widget.title, color),
       body: !_started && !_gameOver
           ? Center(
@@ -148,15 +151,15 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('🔐', style: TextStyle(fontSize: 64)),
+                    Icon(Icons.lock_rounded, size: 64, color: color),
                     const SizedBox(height: 12),
-                    const Text(
+                    Text(
                         'Crack the 4-digit code. Green = right digit & spot, '
                         'yellow = right digit, wrong spot.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textMedium)),
+                            color: palette.textMedium)),
                     const SizedBox(height: 20),
                     ElevatedButton(
                       onPressed: _start,
@@ -186,21 +189,32 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
                             const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
                           color: _secondsLeft <= 15
-                              ? AppColors.danger.withOpacity(0.15)
+                              ? palette.danger.withOpacity(0.15)
                               : color.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: Text('⏱ ${_secondsLeft}s',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w800,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.timer_outlined,
+                                size: 15,
                                 color: _secondsLeft <= 15
-                                    ? AppColors.danger
-                                    : color)),
+                                    ? palette.danger
+                                    : color),
+                            const SizedBox(width: 4),
+                            Text('${_secondsLeft}s',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: _secondsLeft <= 15
+                                        ? palette.danger
+                                        : color)),
+                          ],
+                        ),
                       ),
                       Text('${_guesses.length} guess${_guesses.length == 1 ? '' : 'es'}',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: AppColors.textMedium)),
+                              color: palette.textMedium)),
                     ],
                   ),
                 ),
@@ -217,7 +231,7 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
                         margin: const EdgeInsets.symmetric(horizontal: 6),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: filled ? color.withOpacity(0.15) : AppColors.cardBg,
+                          color: filled ? color.withOpacity(0.15) : palette.cardBg,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                               color: filled ? color : Colors.grey.shade300, width: 2),
@@ -232,9 +246,9 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
                 // Past guesses
                 Expanded(
                   child: _guesses.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Text('Your guesses will appear here',
-                              style: TextStyle(color: AppColors.textMedium)))
+                              style: TextStyle(color: palette.textMedium)))
                       : ListView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           itemCount: _guesses.length,
@@ -245,9 +259,10 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 14, vertical: 10),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: theme.colorScheme.surface,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.grey.shade200),
+                                border: Border.all(
+                                    color: theme.colorScheme.outlineVariant),
                               ),
                               child: Row(
                                 children: [
@@ -257,17 +272,17 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
                                   const Spacer(),
                                   ...List.generate(
                                       g.bulls,
-                                      (_) => const Padding(
-                                            padding: EdgeInsets.only(left: 2),
+                                      (_) => Padding(
+                                            padding: const EdgeInsets.only(left: 2),
                                             child: Icon(Icons.circle,
-                                                size: 12, color: AppColors.success),
+                                                size: 12, color: palette.success),
                                           )),
                                   ...List.generate(
                                       g.cows,
-                                      (_) => const Padding(
-                                            padding: EdgeInsets.only(left: 2),
+                                      (_) => Padding(
+                                            padding: const EdgeInsets.only(left: 2),
                                             child: Icon(Icons.circle,
-                                                size: 12, color: AppColors.warning),
+                                                size: 12, color: palette.warning),
                                           )),
                                 ],
                               ),
@@ -314,6 +329,7 @@ class _DigitKey extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return GestureDetector(
       onTap: disabled ? null : onTap,
       child: Container(
@@ -321,14 +337,18 @@ class _DigitKey extends StatelessWidget {
         height: 48,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: disabled ? Colors.grey.shade100 : color.withOpacity(0.12),
+          color: disabled
+              ? theme.colorScheme.outlineVariant.withOpacity(0.3)
+              : color.withOpacity(0.12),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text('$digit',
             style: TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 18,
-                color: disabled ? Colors.grey.shade400 : color)),
+                color: disabled
+                    ? theme.colorScheme.onSurfaceVariant
+                    : color)),
       ),
     );
   }

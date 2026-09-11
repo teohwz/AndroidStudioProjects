@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/services/auth_service.dart';
 import 'login_screen.dart';
 import 'visitor_register_screen.dart';
@@ -111,11 +111,13 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     final canPop = Navigator.of(context).canPop();
     final showExhibitorCard = widget.hideRole != 'exhibitor';
     final showVisitorCard = widget.hideRole != 'visitor';
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
@@ -128,8 +130,7 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen> {
                     ? Align(
                         alignment: Alignment.centerLeft,
                         child: IconButton(
-                          icon: const Icon(Icons.close,
-                              color: AppColors.textDark),
+                          icon: Icon(Icons.close, color: palette.textDark),
                           onPressed: () => Navigator.of(context).pop(),
                         ),
                       )
@@ -141,44 +142,40 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen> {
                   width: 88,
                   height: 88,
                   decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
+                    gradient: palette.primaryGradient,
                     borderRadius: BorderRadius.circular(26),
                   ),
-                  child: const Icon(Icons.celebration,
+                  child: const Icon(Icons.celebration_rounded,
                       size: 48, color: Colors.white),
                 ),
               ),
               const SizedBox(height: 24),
-              const Center(
-                child: Text('Fun Kits',
-                    style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textDark)),
+              Center(
+                child: Text('Fun Kits', style: theme.textTheme.displayMedium),
               ),
               const SizedBox(height: 8),
-              const Center(
+              Center(
                 child: Text("Who's joining today?",
-                    style:
-                        TextStyle(fontSize: 15, color: AppColors.textMedium)),
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: palette.textMedium)),
               ),
               const SizedBox(height: 40),
               if (showExhibitorCard)
                 _RoleCard(
-                  emoji: '🏢',
+                  icon: Icons.store_rounded,
                   title: 'I am an Exhibitor',
                   subtitle: 'Sign in to manage your booth',
-                  gradient: AppColors.primaryGradient,
+                  gradient: palette.primaryGradient,
                   onTap: _busy ? null : _continueAsExhibitor,
                 ),
               if (showExhibitorCard && showVisitorCard)
                 const SizedBox(height: 16),
               if (showVisitorCard)
                 _RoleCard(
-                  emoji: '🎟️',
+                  icon: Icons.confirmation_number_rounded,
                   title: 'I am a Visitor',
                   subtitle: 'Play games, earn points, and win prizes',
-                  gradient: AppColors.secondaryGradient,
+                  gradient: palette.secondaryGradient,
                   isLoading: _busy,
                   onTap: _busy ? null : _continueAsVisitor,
                 ),
@@ -194,7 +191,7 @@ class _RoleChoiceScreenState extends State<RoleChoiceScreen> {
 
 class _RoleCard extends StatelessWidget {
   const _RoleCard({
-    required this.emoji,
+    required this.icon,
     required this.title,
     required this.subtitle,
     required this.gradient,
@@ -202,7 +199,7 @@ class _RoleCard extends StatelessWidget {
     this.isLoading = false,
   });
 
-  final String emoji;
+  final IconData icon;
   final String title;
   final String subtitle;
   final LinearGradient gradient;
@@ -230,7 +227,16 @@ class _RoleCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 34)),
+              Container(
+                width: 52,
+                height: 52,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.22),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icon, color: Colors.white, size: 28),
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(

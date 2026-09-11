@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/services/auth_service.dart';
 import '../../app/routes.dart';
 import '../../shared/widgets/fun_button.dart';
@@ -74,12 +74,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: const BackButton(color: AppColors.textDark),
+        foregroundColor: palette.textDark,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -96,64 +98,54 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: 80,
                     height: 80,
                     decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
+                      gradient: palette.primaryGradient,
                       borderRadius: BorderRadius.circular(24),
                     ),
-                    child: const Icon(Icons.celebration,
+                    child: const Icon(Icons.celebration_rounded,
                         size: 44, color: Colors.white),
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Center(
-                  child: Text(
-                    'Fun Kits',
-                    style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textDark),
-                  ),
+                Center(
+                  child: Text('Fun Kits', style: theme.textTheme.displayMedium),
                 ),
-                const Center(
+                Center(
                   child: Text('Organizer & exhibitor sign-in',
-                      style: TextStyle(
-                          color: AppColors.textMedium, fontSize: 14)),
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: palette.textMedium)),
                 ),
-                const Center(
+                Center(
                   child: Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text('Visitors don\'t need an account — just scan a booth QR.',
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                        'Visitors don\'t need an account — just scan a booth QR.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                            color: AppColors.textMedium, fontSize: 11)),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: palette.textMedium)),
                   ),
                 ),
                 const SizedBox(height: 40),
-                const Text('Email',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textDark)),
+                Text('Email', style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: _inputDecoration('Enter your email'),
+                  decoration: _inputDecoration(context, 'Enter your email'),
                   validator: (v) =>
                       v!.isEmpty ? 'Email is required' : null,
                 ),
                 const SizedBox(height: 20),
-                const Text('Password',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textDark)),
+                Text('Password', style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _passwordCtrl,
                   obscureText: _obscure,
-                  decoration: _inputDecoration('Enter your password').copyWith(
+                  decoration:
+                      _inputDecoration(context, 'Enter your password').copyWith(
                     suffixIcon: IconButton(
                       icon: Icon(_obscure
-                          ? Icons.visibility_off
-                          : Icons.visibility),
+                          ? Icons.visibility_off_rounded
+                          : Icons.visibility_rounded),
                       onPressed: () =>
                           setState(() => _obscure = !_obscure),
                     ),
@@ -167,7 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     label: 'Login',
                     isLoading: auth.isLoading,
                     onPressed: _login,
-                    gradient: AppColors.primaryGradient,
+                    gradient: palette.primaryGradient,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -175,15 +167,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: GestureDetector(
                     onTap: () => Navigator.pushNamed(
                         context, AppRoutes.register),
-                    child: const Text.rich(
+                    child: Text.rich(
                       TextSpan(
                         text: 'Have an exhibitor invite code? ',
-                        style: TextStyle(color: AppColors.textMedium),
+                        style: TextStyle(color: palette.textMedium),
                         children: [
                           TextSpan(
                             text: 'Register',
                             style: TextStyle(
-                                color: AppColors.primary,
+                                color: theme.colorScheme.primary,
                                 fontWeight: FontWeight.w700),
                           ),
                         ],
@@ -196,11 +188,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   Center(
                     child: TextButton(
                       onPressed: _changeRole,
-                      child: const Text(
+                      child: Text(
                         'Not exhibitors? Change role',
                         style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: AppColors.textMedium),
+                            color: palette.textMedium),
                       ),
                     ),
                   ),
@@ -212,26 +204,27 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: AppColors.textMedium),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color(0xFFE0DFFF), width: 1.5),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: AppColors.primary, width: 2),
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      );
+  InputDecoration _inputDecoration(BuildContext context, String hint) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: palette.textMedium),
+      filled: true,
+      fillColor: palette.cardBg,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+    );
+  }
 }

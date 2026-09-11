@@ -9,9 +9,9 @@ import 'package:gal/gal.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/models/exhibitor_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 /// Curated look-and-feel presets for an exhibitor's booth QR code. Every
 /// preset encodes the exact same `funkits:booth:<boothId>` payload that
@@ -105,8 +105,16 @@ class _ExhibitorQrScreenState extends State<ExhibitorQrScreen> {
       if (bytes == null) return;
       await Gal.putImageBytes(bytes, album: 'Fun Kits');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Saved to your gallery ✅')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Text('Saved to your gallery'),
+          ],
+        ),
+      ));
     } on GalException catch (e) {
       if (!mounted) return;
       final msg = e.type == GalExceptionType.accessDenied
@@ -155,12 +163,14 @@ class _ExhibitorQrScreenState extends State<ExhibitorQrScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('My QR Code',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.exhibitorColor,
+        backgroundColor: palette.exhibitorColor,
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder<ExhibitorModel?>(
@@ -178,10 +188,10 @@ class _ExhibitorQrScreenState extends State<ExhibitorQrScreen> {
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              const Text(
+              Text(
                 'Visitors scan this at your booth to load your theme, '
                 'logo, and games instantly.',
-                style: TextStyle(color: AppColors.textMedium),
+                style: TextStyle(color: palette.textMedium),
               ),
               const SizedBox(height: 20),
               Center(
@@ -204,24 +214,23 @@ class _ExhibitorQrScreenState extends State<ExhibitorQrScreen> {
                           selected: preset == p,
                           onSelected: (_) => _selectPreset(booth, p),
                           selectedColor:
-                              AppColors.exhibitorColor.withOpacity(0.18),
+                              palette.exhibitorColor.withOpacity(0.18),
                           labelStyle: TextStyle(
                             fontWeight: FontWeight.w700,
                             color: preset == p
-                                ? AppColors.exhibitorColor
-                                : AppColors.textMedium,
+                                ? palette.exhibitorColor
+                                : palette.textMedium,
                           ),
                         ))
                     .toList(),
               ),
               if (!booth.hasLogo)
-                const Padding(
-                  padding: EdgeInsets.only(top: 10),
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
                   child: Text(
                     'Add a logo in Customize Booth to unlock the Logo Badge '
                     'style.',
-                    style:
-                        TextStyle(color: AppColors.textMedium, fontSize: 12),
+                    style: TextStyle(color: palette.textMedium, fontSize: 12),
                   ),
                 ),
               const SizedBox(height: 30),
@@ -240,7 +249,7 @@ class _ExhibitorQrScreenState extends State<ExhibitorQrScreen> {
                       : const Icon(Icons.download_rounded),
                   label: const Text('Save to Gallery'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.exhibitorColor,
+                    backgroundColor: palette.exhibitorColor,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -262,8 +271,8 @@ class _ExhibitorQrScreenState extends State<ExhibitorQrScreen> {
                       : const Icon(Icons.ios_share_rounded),
                   label: const Text('Share / Print'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.exhibitorColor,
-                    side: BorderSide(color: AppColors.exhibitorColor),
+                    foregroundColor: palette.exhibitorColor,
+                    side: BorderSide(color: palette.exhibitorColor),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
@@ -337,6 +346,9 @@ class _QrCard extends StatelessWidget {
         break;
     }
 
+    // This card's own background stays fixed white regardless of app theme —
+    // it's a mockup of the physical printed card an exhibitor would put on
+    // their table, not app chrome, so it shouldn't go dark in dark mode.
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -381,8 +393,7 @@ class _QrCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text('Booth #${booth.boothNumber}',
-                  style: const TextStyle(
-                      color: AppColors.textMedium, fontSize: 12)),
+                  style: const TextStyle(color: Colors.black54, fontSize: 12)),
             ),
         ],
       ),

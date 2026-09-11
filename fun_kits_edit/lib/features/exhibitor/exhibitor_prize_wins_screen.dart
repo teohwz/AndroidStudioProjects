@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/constants/game_types.dart';
 import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 /// Exhibitor-scoped hand-out checklist for physical prizes won at [boothId]
 /// via the Spin Wheel, Scratch Card, or Lucky Draw (points wins are paid
@@ -17,12 +18,14 @@ class ExhibitorPrizeWinsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fs = FirestoreService();
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Prize Wins 🎁',
+        title: const Text('Prize Wins',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.accent,
+        backgroundColor: palette.gold,
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder<List<PrizeWinModel>>(
@@ -33,14 +36,15 @@ class ExhibitorPrizeWinsScreen extends StatelessWidget {
           }
           final wins = snap.data ?? [];
           if (wins.isEmpty) {
-            return const Center(
+            return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('🎁', style: TextStyle(fontSize: 64)),
-                  SizedBox(height: 12),
+                  Icon(Icons.card_giftcard_rounded,
+                      size: 64, color: palette.textMedium),
+                  const SizedBox(height: 12),
                   Text('No physical prizes won yet.',
-                      style: TextStyle(color: AppColors.textMedium)),
+                      style: TextStyle(color: palette.textMedium)),
                 ],
               ),
             );
@@ -60,10 +64,10 @@ class ExhibitorPrizeWinsScreen extends StatelessWidget {
               ],
               if (collected.isNotEmpty) ...[
                 Text('Collected (${collected.length})',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 15,
-                        color: AppColors.textMedium)),
+                        color: palette.textMedium)),
                 const SizedBox(height: 8),
                 for (final w in collected) _PrizeWinTile(win: w, fs: fs),
               ],
@@ -82,29 +86,43 @@ class _PrizeWinTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
+    final game = _gameOf(win.gameType);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       elevation: win.collected ? 0.5 : 2,
-      color: win.collected ? AppColors.cardBg.withOpacity(0.5) : Colors.white,
+      color: win.collected
+          ? palette.cardBg.withOpacity(0.5)
+          : theme.colorScheme.surface,
       child: CheckboxListTile(
         value: win.collected,
         onChanged: (v) => fs.markPrizeCollected(win.id, v ?? false),
-        activeColor: AppColors.success,
+        activeColor: palette.success,
         controlAffinity: ListTileControlAffinity.leading,
         title: Text(win.prizeLabel,
             style: TextStyle(
                 fontWeight: FontWeight.w700,
                 decoration: win.collected ? TextDecoration.lineThrough : null)),
-        subtitle: Text('${win.userName} · ${_gameLabel(win.gameType)}'),
+        subtitle: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${win.userName} · '),
+            Icon(game?.icon ?? Icons.card_giftcard_rounded,
+                size: 14, color: palette.textMedium),
+            const SizedBox(width: 4),
+            Text(game?.label ?? win.gameType),
+          ],
+        ),
       ),
     );
   }
 
-  String _gameLabel(String gameType) => switch (gameType) {
-        'spin_wheel' => '🎡 Spin Wheel',
-        'scratch_card' => '🪙 Scratch Card',
-        'lucky_draw' => '🎰 Lucky Draw',
-        _ => gameType,
-      };
+  GameTypeDef? _gameOf(String gameType) {
+    for (final g in kGameTypes) {
+      if (g.key == gameType) return g;
+    }
+    return null;
+  }
 }

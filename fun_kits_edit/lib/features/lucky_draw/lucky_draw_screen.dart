@@ -2,11 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../../core/models/lucky_draw_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/utils/mask_name.dart';
 import '../../shared/widgets/register_required_dialog.dart';
+import '../../shared/widgets/icon_badge.dart';
 
 class LuckyDrawScreen extends StatefulWidget {
   const LuckyDrawScreen({super.key, this.exhibitorId});
@@ -90,7 +91,7 @@ class _LuckyDrawScreenState extends State<LuckyDrawScreen> {
     if (mounted) {
       setState(() => _joinedDrawId = draw.id);
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('🎉 You joined the draw!')));
+          const SnackBar(content: Text('You joined the draw!')));
     }
   }
 
@@ -100,14 +101,15 @@ class _LuckyDrawScreenState extends State<LuckyDrawScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Lucky Draw 🎰',
-            style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.luckyDrawColor,
+        title: const Text('Lucky Draw'),
+        backgroundColor: palette.luckyDrawColor,
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder<List<LuckyDrawModel>>(
@@ -127,14 +129,15 @@ class _LuckyDrawScreenState extends State<LuckyDrawScreen> {
           }
 
           if (draws.isEmpty) {
-            return const Center(
+            return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('🎰', style: TextStyle(fontSize: 64)),
-                  SizedBox(height: 12),
+                  Icon(Icons.casino_rounded,
+                      size: 56, color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(height: 12),
                   Text('No active draws right now.',
-                      style: TextStyle(color: AppColors.textMedium)),
+                      style: TextStyle(color: palette.textMedium)),
                 ],
               ),
             );
@@ -215,13 +218,13 @@ class _DrawCardState extends State<_DrawCard> {
 
   @override
   Widget build(BuildContext context) {
-    final color = AppColors.luckyDrawColor;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
+    final color = palette.luckyDrawColor;
     final hasTimer = widget.draw.endsAt != null;
     final ended = widget.draw.hasEnded;
 
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      elevation: 3,
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -231,26 +234,15 @@ class _DrawCardState extends State<_DrawCard> {
             // Header row
             Row(
               children: [
-                Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.casino_rounded,
-                      color: AppColors.luckyDrawColor, size: 24),
-                ),
+                IconBadge(icon: Icons.casino_rounded, color: color, size: 44),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.draw.title,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w800, fontSize: 16)),
-                      Text('🎁 ${widget.draw.prize}',
-                          style: const TextStyle(
-                              color: AppColors.textMedium, fontSize: 13)),
+                      Text(widget.draw.title, style: theme.textTheme.titleMedium),
+                      Text(widget.draw.prize,
+                          style: TextStyle(color: palette.textMedium, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -259,14 +251,22 @@ class _DrawCardState extends State<_DrawCard> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.15),
+                      color: palette.success.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Text('✓ Joined',
-                        style: TextStyle(
-                            color: AppColors.success,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_rounded,
+                            size: 14, color: palette.success),
+                        const SizedBox(width: 4),
+                        Text('Joined',
+                            style: TextStyle(
+                                color: palette.success,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12)),
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -279,20 +279,20 @@ class _DrawCardState extends State<_DrawCard> {
                     horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: ended
-                      ? Colors.grey.shade100
+                      ? theme.colorScheme.outlineVariant.withOpacity(0.2)
                       : color.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                       color: ended
-                          ? Colors.grey.shade300
+                          ? theme.colorScheme.outlineVariant
                           : color.withOpacity(0.25)),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      ended ? Icons.lock_clock : Icons.timer_outlined,
+                      ended ? Icons.lock_clock_rounded : Icons.timer_outlined,
                       size: 18,
-                      color: ended ? AppColors.textMedium : color,
+                      color: ended ? palette.textMedium : color,
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -301,7 +301,7 @@ class _DrawCardState extends State<_DrawCard> {
                           : 'Closes in ${_fmt(_remaining)}',
                       style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          color: ended ? AppColors.textMedium : color,
+                          color: ended ? palette.textMedium : color,
                           fontSize: 14),
                     ),
                   ],
@@ -309,9 +309,14 @@ class _DrawCardState extends State<_DrawCard> {
               ),
 
             const SizedBox(height: 12),
-            Text('👥 ${widget.draw.participants.length} participants',
-                style: const TextStyle(
-                    color: AppColors.textMedium, fontSize: 13)),
+            Row(
+              children: [
+                Icon(Icons.groups_rounded, size: 16, color: palette.textMedium),
+                const SizedBox(width: 6),
+                Text('${widget.draw.participants.length} participants',
+                    style: TextStyle(color: palette.textMedium, fontSize: 13)),
+              ],
+            ),
             const SizedBox(height: 14),
 
             // Winner banner
@@ -320,16 +325,26 @@ class _DrawCardState extends State<_DrawCard> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withOpacity(0.12),
+                  color: palette.gold.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: AppColors.accent.withOpacity(0.4)),
+                  border: Border.all(color: palette.gold.withOpacity(0.4)),
                 ),
-                child: Text('🏆 Winner: ${widget.winnerName ?? "Drawing..."}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.warning)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.emoji_events_rounded,
+                        size: 18, color: palette.warning),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                          'Winner: ${widget.winnerName ?? "Drawing..."}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: palette.warning)),
+                    ),
+                  ],
+                ),
               )
             else if (!ended && !widget.hasJoined && widget.canJoin)
               SizedBox(
@@ -337,14 +352,10 @@ class _DrawCardState extends State<_DrawCard> {
                 child: ElevatedButton.icon(
                   onPressed: widget.onJoin,
                   icon: const Icon(Icons.how_to_reg_rounded, size: 18),
-                  label: const Text('Join Draw',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
+                  label: const Text('Join Draw'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: color,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               )
@@ -353,14 +364,13 @@ class _DrawCardState extends State<_DrawCard> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: theme.colorScheme.outlineVariant.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
+                child: Text(
                   'Finish your current draw first',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: AppColors.textMedium, fontSize: 13),
+                  style: TextStyle(color: palette.textMedium, fontSize: 13),
                 ),
               ),
           ],

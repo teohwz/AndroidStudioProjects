@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 import '../../shared/widgets/fun_button.dart';
 
 /// Exhibitor-scoped — always edits [boothId]'s (the caller's own booth)
@@ -82,18 +82,28 @@ class _ManageGuessNumberScreenState extends State<ManageGuessNumberScreen> {
     );
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Guess the Number saved! 🔢')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+          SizedBox(width: 8),
+          Text('Guess the Number saved!'),
+        ],
+      ),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Guess the Number 🔢',
+        title: const Text('Guess the Number',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: AppColors.guessNumberColor,
+        backgroundColor: palette.guessNumberColor,
         foregroundColor: Colors.white,
       ),
       body: _loading
@@ -107,8 +117,7 @@ class _ManageGuessNumberScreenState extends State<ManageGuessNumberScreen> {
                     'Visitors get up to ${GuessNumberConfig.maxAttempts} '
                     'guesses, with automatic Higher/Lower feedback after '
                     'each one and your hint revealable any time.',
-                    style: const TextStyle(
-                        color: AppColors.textMedium, fontSize: 12),
+                    style: TextStyle(color: palette.textMedium, fontSize: 12),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -173,9 +182,9 @@ class _ManageGuessNumberScreenState extends State<ManageGuessNumberScreen> {
                   label: 'Save Guess the Number',
                   isLoading: _saving,
                   onPressed: _save,
-                  gradient: const LinearGradient(colors: [
-                    AppColors.guessNumberColor,
-                    Color(0xFF8E99E8),
+                  gradient: LinearGradient(colors: [
+                    palette.guessNumberColor,
+                    const Color(0xFF8E99E8),
                   ]),
                 ),
               ),

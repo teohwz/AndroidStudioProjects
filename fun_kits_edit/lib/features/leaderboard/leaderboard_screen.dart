@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/routes.dart';
-import '../../core/constants/app_colors.dart';
 import '../../core/constants/game_types.dart';
 import '../../core/models/exhibitor_model.dart';
 import '../../core/models/leaderboard_model.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/app_palette.dart';
 
 enum _LbMode { global, perGame, perExhibitor }
 
@@ -24,19 +24,6 @@ class _Row {
       required this.points,
       required this.rank,
       this.gamesPlayed});
-
-  String get medalEmoji {
-    switch (rank) {
-      case 1:
-        return '🥇';
-      case 2:
-        return '🥈';
-      case 3:
-        return '🥉';
-      default:
-        return '#$rank';
-    }
-  }
 }
 
 class LeaderboardScreen extends StatefulWidget {
@@ -56,13 +43,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Leaderboard 🏆',
+        title: const Text('Leaderboard',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: const Color(0xFFFFD700),
-        foregroundColor: AppColors.textDark,
+        backgroundColor: palette.gold,
+        foregroundColor: Colors.black87,
       ),
       body: Column(
         children: [
@@ -122,12 +111,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         );
       case _LbMode.perExhibitor:
         if (_selectedExhibitorId == null) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24),
               child: Text('Pick a booth above to see its leaderboard.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textMedium)),
+                  style: TextStyle(
+                      color: Theme.of(context)
+                          .extension<AppPalette>()!
+                          .textMedium)),
             ),
           );
         }
@@ -154,7 +146,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     if (rows.isEmpty) {
       return Center(
           child: Text(emptyMessage,
-              style: const TextStyle(color: AppColors.textMedium)));
+              style: TextStyle(
+                  color: Theme.of(context)
+                      .extension<AppPalette>()!
+                      .textMedium)));
     }
     final topThree = rows.take(3).toList();
     final remaining = rows.skip(3).toList();
@@ -186,6 +181,7 @@ class _JoinToRankBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -193,13 +189,13 @@ class _JoinToRankBanner extends StatelessWidget {
         margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: AppColors.warning.withOpacity(0.12),
+          color: palette.warning.withOpacity(0.12),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.warning.withOpacity(0.35)),
+          border: Border.all(color: palette.warning.withOpacity(0.35)),
         ),
         child: Row(
           children: [
-            const Text('👀', style: TextStyle(fontSize: 18)),
+            Icon(Icons.visibility_rounded, size: 18, color: palette.warning),
             const SizedBox(width: 10),
             const Expanded(
               child: Text(
@@ -212,7 +208,7 @@ class _JoinToRankBanner extends StatelessWidget {
                 style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.warning.withOpacity(0.9))),
+                    color: palette.warning.withOpacity(0.9))),
           ],
         ),
       ),
@@ -240,8 +236,10 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
     return Container(
-      color: Colors.white,
+      color: theme.colorScheme.surface,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(
         children: [
@@ -250,7 +248,7 @@ class _FilterBar extends StatelessWidget {
               Expanded(
                 child: _ModeChip(
                   label: 'Global',
-                  emoji: '🌍',
+                  icon: Icons.public_rounded,
                   selected: mode == _LbMode.global,
                   onTap: () => onModeChanged(_LbMode.global),
                 ),
@@ -259,7 +257,7 @@ class _FilterBar extends StatelessWidget {
               Expanded(
                 child: _ModeChip(
                   label: 'Per Game',
-                  emoji: '🎮',
+                  icon: Icons.videogame_asset_rounded,
                   selected: mode == _LbMode.perGame,
                   onTap: () => onModeChanged(_LbMode.perGame),
                 ),
@@ -268,7 +266,7 @@ class _FilterBar extends StatelessWidget {
               Expanded(
                 child: _ModeChip(
                   label: 'Per Booth',
-                  emoji: '🏢',
+                  icon: Icons.storefront_rounded,
                   selected: mode == _LbMode.perExhibitor,
                   onTap: () => onModeChanged(_LbMode.perExhibitor),
                 ),
@@ -287,15 +285,24 @@ class _FilterBar extends StatelessWidget {
                   final g = kGameTypes[i];
                   final sel = g.key == selectedGame;
                   return ChoiceChip(
-                    label: Text('${g.emoji} ${g.label}'),
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(g.icon,
+                            size: 14,
+                            color: sel ? Colors.white : palette.textDark),
+                        const SizedBox(width: 4),
+                        Text(g.label),
+                      ],
+                    ),
                     selected: sel,
                     onSelected: (_) => onGameChanged(g.key),
-                    selectedColor: AppColors.primary,
+                    selectedColor: theme.colorScheme.primary,
                     labelStyle: TextStyle(
-                        color: sel ? Colors.white : AppColors.textDark,
+                        color: sel ? Colors.white : palette.textDark,
                         fontWeight: FontWeight.w700,
                         fontSize: 12),
-                    backgroundColor: AppColors.cardBg,
+                    backgroundColor: palette.cardBg,
                   );
                 },
               ),
@@ -317,32 +324,41 @@ class _FilterBar extends StatelessWidget {
 class _ModeChip extends StatelessWidget {
   const _ModeChip(
       {required this.label,
-      required this.emoji,
+      required this.icon,
       required this.selected,
       required this.onTap});
   final String label;
-  final String emoji;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          gradient: selected ? AppColors.primaryGradient : null,
-          color: selected ? null : AppColors.cardBg,
+          gradient: selected ? palette.primaryGradient : null,
+          color: selected ? null : palette.cardBg,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Text('$emoji $label',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-                color: selected ? Colors.white : AppColors.textDark)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon,
+                size: 15, color: selected ? Colors.white : palette.textDark),
+            const SizedBox(width: 5),
+            Text(label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: selected ? Colors.white : palette.textDark)),
+          ],
+        ),
       ),
     );
   }
@@ -361,9 +377,10 @@ class _ExhibitorPicker extends StatelessWidget {
       stream: fs.getExhibitors(),
       builder: (context, snap) {
         final exhibitors = snap.data ?? [];
+        final palette = Theme.of(context).extension<AppPalette>()!;
         if (exhibitors.isEmpty) {
-          return const Text('No booths yet.',
-              style: TextStyle(color: AppColors.textMedium, fontSize: 12));
+          return Text('No booths yet.',
+              style: TextStyle(color: palette.textMedium, fontSize: 12));
         }
         return SizedBox(
           width: double.infinity,
@@ -374,7 +391,7 @@ class _ExhibitorPicker extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.textDark,
+              foregroundColor: palette.textDark,
               padding: const EdgeInsets.symmetric(vertical: 10),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
@@ -391,8 +408,8 @@ class _ExhibitorPicker extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     children: exhibitors
                         .map((e) => ListTile(
-                              leading: const Text('🏢',
-                                  style: TextStyle(fontSize: 20)),
+                              leading: const Icon(Icons.storefront_rounded,
+                                  size: 20),
                               title: Text(e.name,
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w700)),
@@ -420,27 +437,35 @@ class _LeaderRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final isTop3 = row.rank <= 3;
     final isFirst = row.rank == 1;
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
 
     return Container(
       decoration: BoxDecoration(
-        color: isTop3 ? AppColors.accent.withOpacity(0.08) : Colors.white,
+        color: isTop3
+            ? palette.gold.withOpacity(0.08)
+            : theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color:
-              isTop3 ? AppColors.accent.withOpacity(0.4) : Colors.transparent,
+          color: isTop3 ? palette.gold.withOpacity(0.4) : Colors.transparent,
         ),
       ),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor:
-              isTop3 ? AppColors.accent : AppColors.primary.withOpacity(0.15),
-          child: Text(
-            isFirst ? '👑' : '#${row.rank}',
-            style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: isTop3 ? Colors.white : AppColors.primary,
-                fontSize: isFirst ? 18 : 13),
-          ),
+          backgroundColor: isTop3
+              ? palette.gold
+              : theme.colorScheme.primary.withOpacity(0.15),
+          child: isFirst
+              ? const Icon(Icons.workspace_premium_rounded,
+                  color: Colors.white, size: 18)
+              : Text(
+                  '#${row.rank}',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color:
+                          isTop3 ? Colors.white : theme.colorScheme.primary,
+                      fontSize: 13),
+                ),
         ),
         title:
             Text(row.name, style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -450,8 +475,7 @@ class _LeaderRow extends StatelessWidget {
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            gradient:
-                isTop3 ? AppColors.goldGradient : AppColors.primaryGradient,
+            gradient: isTop3 ? palette.goldGradient : palette.primaryGradient,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text('${row.points} pts',
@@ -476,7 +500,7 @@ class _PodiumWidget extends StatelessWidget {
     final third = topThree.length > 2 ? topThree[2] : null;
 
     return Container(
-      color: AppColors.primary.withOpacity(0.05),
+      color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -515,7 +539,7 @@ class _PodiumPosition extends StatelessWidget {
   final int position;
   final double height;
 
-  Color get _backgroundColor {
+  Color _backgroundColor(BuildContext context) {
     switch (position) {
       case 1:
         return const Color(0xFFFFD700);
@@ -524,15 +548,16 @@ class _PodiumPosition extends StatelessWidget {
       case 3:
         return const Color(0xFFCD7F32);
       default:
-        return AppColors.primary;
+        return Theme.of(context).colorScheme.primary;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = _backgroundColor(context);
     return Column(
       children: [
-        Text(row.medalEmoji, style: const TextStyle(fontSize: 28)),
+        Icon(Icons.emoji_events_rounded, size: 28, color: bgColor),
         const SizedBox(height: 4),
         Flexible(
           child: Text(
@@ -547,7 +572,7 @@ class _PodiumPosition extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-            color: _backgroundColor,
+            color: bgColor,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
@@ -565,7 +590,7 @@ class _PodiumPosition extends StatelessWidget {
             width: double.infinity,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [_backgroundColor, _backgroundColor.withOpacity(0.7)],
+                colors: [bgColor, bgColor.withOpacity(0.7)],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
@@ -575,7 +600,7 @@ class _PodiumPosition extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: _backgroundColor.withOpacity(0.3),
+                  color: bgColor.withOpacity(0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
