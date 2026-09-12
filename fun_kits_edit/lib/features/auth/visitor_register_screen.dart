@@ -90,6 +90,21 @@ class _VisitorRegisterScreenState extends State<VisitorRegisterScreen> {
         .pushNamedAndRemoveUntil(AppRoutes.home, (route) => false);
   }
 
+  /// Handles both the AppBar's back arrow and the system back
+  /// gesture/button (via the enclosing PopScope below). When this screen's
+  /// anonymous session was just freshly created by RoleChoiceScreen
+  /// (showSkip == true — see this widget's doc comment), backing out
+  /// discards that empty session first so app.dart's root screen falls
+  /// back to RoleChoiceScreen instead of reactively showing Home as a
+  /// guest. Otherwise (an existing account reached this screen some other
+  /// way) this is just a normal pop.
+  Future<void> _handleBack() async {
+    if (widget.showSkip) {
+      await context.read<AuthService>().discardFreshVisitorSession();
+    }
+    if (mounted) Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     const bgColor = Color(0xFF1A1A2E);
@@ -101,17 +116,29 @@ class _VisitorRegisterScreenState extends State<VisitorRegisterScreen> {
       end: Alignment.bottomRight,
     );
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 350),
-      color: bgColor,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
+    return PopScope(
+      // Intercept both the system back gesture/button AND the AppBar back
+      // arrow below (its onPressed calls Navigator.pop, which this also
+      // gates) — either one needs to run _handleBack()'s discard-then-pop
+      // sequence, not a bare pop.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 350),
+        color: bgColor,
+        child: Scaffold(
           backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: const BackButton(color: Colors.white),
-        ),
-        body: SafeArea(
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: _handleBack,
+            ),
+          ),
+          body: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
             child: Form(
@@ -260,6 +287,7 @@ class _VisitorRegisterScreenState extends State<VisitorRegisterScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

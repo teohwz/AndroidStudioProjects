@@ -181,6 +181,29 @@ class AuthService extends ChangeNotifier {
     await ensureVisitorSession();
   }
 
+  /// Called only when a visitor backs out of VisitorRegisterScreen without
+  /// registering or skipping, in the one case where arriving there had just
+  /// silently created a brand-new anonymous session via ensureVisitorSession()
+  /// moments earlier (see VisitorRegisterScreen.showSkip) — nothing has been
+  /// earned on it yet, so it's safe to sign out of entirely.
+  ///
+  /// Deliberately different from [logout]: this does NOT call
+  /// ensureVisitorSession() again afterward, and does NOT set
+  /// [lastKnownMode] — the whole point is for app.dart's root screen to see
+  /// no signed-in user and no last mode, so it falls back to showing
+  /// RoleChoiceScreen again instead of silently landing on Home as a guest
+  /// (which is what happened before this fix: that root screen is reactive
+  /// to auth state, so simply popping the navigator wasn't enough once the
+  /// anonymous sign-in had already completed underneath).
+  Future<void> discardFreshVisitorSession() async {
+    await _roleSub?.cancel();
+    _roleSub = null;
+    await _auth.signOut();
+    _cachedRole = 'visitor';
+    _cachedBoothId = null;
+    notifyListeners();
+  }
+
   // ── Register (LEGACY — no longer reachable from any UI route) ───────────
   // This used to be the organizer/exhibitor open self-registration flow
   // (RegisterScreen, role defaulted to 'admin'). That role and this open
@@ -319,6 +342,38 @@ class AuthService extends ChangeNotifier {
       isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// VisitorLoginScreen's entry point — like [login], but rejects an
+  /// exhibitor or Super Admin account instead of signing it in and routing
+  /// to that staff dashboard. The Exhibitor/Organizer LoginScreen has no
+  /// equivalent restriction on visitor accounts (a deliberate, separate
+  /// decision) — this one exists specifically so a visitor who mistakenly
+  /// types their own exhibitor credentials into the wrong screen is told
+  /// so, rather than silently dropped into the Exhibitor Dashboard.
+  Future<String?> loginAsVisitor({
+    required String email,
+    required String password,
+  }) async {
+    final error = await login(email: email, password: password);
+    if (error != null) return error;
+    if (isExhibitor || isSuperAdmin) {
+      // Discard this sign-in entirely — don't leave a staff account signed
+      // in just because it was tried on the visitor screen — then restore
+      // a guest session so the visitor isn't left stranded with no account
+      // at all (same "never a login wall" principle as ensureVisitorSession
+      // elsewhere).
+      await _roleSub?.cancel();
+      _roleSub = null;
+      await _auth.signOut();
+      _cachedRole = 'visitor';
+      _cachedBoothId = null;
+      notifyListeners();
+      await ensureVisitorSession();
+      return 'This is an exhibitor account. Please use the Exhibitor login '
+          'instead.';
+    }
+    return null;
   }
 
   // ── Save points: upgrade the anonymous session in-place ────────────────

@@ -45,25 +45,20 @@ class _VisitorLoginScreenState extends State<VisitorLoginScreen> {
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthService>();
-    final error = await auth.login(
+    // Rejects an exhibitor/Super Admin account instead of routing into that
+    // staff dashboard — see AuthService.loginAsVisitor's doc comment. On
+    // success, the signed-in account is guaranteed to be a plain visitor.
+    final error = await auth.loginAsVisitor(
         email: _emailCtrl.text.trim(), password: _passwordCtrl.text.trim());
     if (error != null && mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error)));
     } else if (mounted) {
-      // A visitor's email could in principle belong to an exhibitor/Super
-      // Admin account — route by the actual role that comes back, same as
-      // LoginScreen, rather than assuming Home.
-      final destination = auth.isSuperAdmin
-          ? AppRoutes.superAdminDashboard
-          : auth.isExhibitor
-              ? AppRoutes.exhibitorDashboard
-              : AppRoutes.home;
       // Clears the whole stack either way — this screen can be the sole
       // bootstrap route (post-logout) or pushed on top of Register/Login,
       // and either way a fresh sign-in should land on a clean destination.
       Navigator.of(context)
-          .pushNamedAndRemoveUntil(destination, (route) => false);
+          .pushNamedAndRemoveUntil(AppRoutes.home, (route) => false);
     }
   }
 
