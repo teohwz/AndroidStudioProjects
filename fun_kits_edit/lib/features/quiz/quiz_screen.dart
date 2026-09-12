@@ -146,20 +146,31 @@ class _QuizScreenState extends State<QuizScreen> {
   Future<void> _submitScore() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+    // A single shared 'quiz' bucket (not one key per quiz id) so every
+    // quiz a visitor plays counts toward the same "Quiz" leaderboard
+    // filter, and so game_sessions can be summed per-booth below. Only
+    // award points when there's something to award — addPoints() with 0
+    // would be a harmless no-op write, so this guard is purely to skip an
+    // unnecessary transaction.
     if (_score > 0) {
-      // A single shared 'quiz' bucket (not one key per quiz id) so every
-      // quiz a visitor plays counts toward the same "Quiz" leaderboard
-      // filter, and so game_sessions can be summed per-booth below.
       await _fs.addPoints(user.uid, user.displayName ?? 'Player', _score,
           gameType: 'quiz');
-      final exhibitorId = _selectedQuiz!.exhibitorId;
-      final durationMs = _quizStartedAt == null
-          ? null
-          : DateTime.now().difference(_quizStartedAt!).inMilliseconds;
-      await _fs.logGameSession(user.uid, 'quiz', _score,
-          exhibitorId: exhibitorId.isNotEmpty ? exhibitorId : null,
-          durationMs: durationMs);
     }
+    // Log the session unconditionally — a 0-point quiz attempt is still a
+    // real play and must count toward "My Stats", per-booth leaderboards,
+    // and gamesPlayed, exactly like every other mini-game already does via
+    // submitGameScore()'s unconditional logGameSession call (game_common.
+    // dart). Previously this call lived inside the `if (_score > 0)` block
+    // above, so a visitor who got every question wrong left no
+    // game_sessions record at all — invisible to every screen that reads
+    // that collection, even though they genuinely played.
+    final exhibitorId = _selectedQuiz!.exhibitorId;
+    final durationMs = _quizStartedAt == null
+        ? null
+        : DateTime.now().difference(_quizStartedAt!).inMilliseconds;
+    await _fs.logGameSession(user.uid, 'quiz', _score,
+        exhibitorId: exhibitorId.isNotEmpty ? exhibitorId : null,
+        durationMs: durationMs);
     await _fs.markQuizCompleted(user.uid, _selectedQuiz!.id);
     if (mounted) setState(() => _completedIds = [..._completedIds, _selectedQuiz!.id]);
   }

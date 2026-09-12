@@ -1,6 +1,8 @@
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart' show IconData, Icons, debugPrint;
+import '../constants/game_types.dart';
 import '../models/exhibitor_model.dart';
 import '../models/quiz_model.dart';
 import '../models/puzzle_model.dart';
@@ -19,12 +21,20 @@ class FirestoreService {
   //  EXHIBITORS
   // ═══════════════════════════════════════════════════════════════════════
 
-  /// Visitor-facing directory — active booths only. Filtered client-side
-  /// (not via a Firestore `where('isActive', ...)` query) so pre-existing
-  /// exhibitor docs from before this field existed — which have no
-  /// `isActive` at all — still show up, matching ExhibitorModel.fromMap's
-  /// "missing means true" default rather than being silently hidden by a
-  /// query that would exclude anything lacking the field.
+  /// Visitor-facing directory — active, CLAIMED booths only. Filtered
+  /// client-side (not via a Firestore `where('isActive', ...)` query) so
+  /// pre-existing exhibitor docs from before that field existed — which
+  /// have no `isActive` at all — still show up, matching
+  /// ExhibitorModel.fromMap's "missing means true" default rather than
+  /// being silently hidden by a query that would exclude anything lacking
+  /// the field. The `isClaimed` check (ownerUid set) excludes booth slots
+  /// Super Admin has created ahead of assigning them (see createBoothSlot)
+  /// — those exist only as a target for an invite-code redemption and have
+  /// no real exhibitor content yet (default "Booth N" name, no logo/
+  /// description/games), so visitors should never see them until an
+  /// exhibitor actually claims and fills one in. Super Admin's own Manage
+  /// Booths screen uses [getBoothsAdmin] instead, which is deliberately
+  /// unfiltered so unclaimed slots stay visible there.
   Stream<List<ExhibitorModel>> getExhibitors() {
     return _db
         .collection('exhibitors')
@@ -32,7 +42,7 @@ class FirestoreService {
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => ExhibitorModel.fromMap(doc.id, doc.data()))
-            .where((e) => e.isActive)
+            .where((e) => e.isActive && e.isClaimed)
             .toList());
   }
 
@@ -568,6 +578,134 @@ class FirestoreService {
         .map((snap) => snap.docs.map((d) => d.data()).toList());
   }
 
+  /// One line in a visitor's combined points ledger (Points History
+  /// screen): either points earned from a game/quiz session or points
+  /// spent on a reward redemption. See [getPointsLedger].
+  // (Kept in this file rather than a separate model file — small, and used
+  // by exactly one screen, matching this codebase's convention for
+  // screen-specific view models like ExhibitorLeaderboardEntry above.)
+
+  /// A visitor's full points ledger — every points-earning game/quiz
+  /// session AND every points-spending redemption, merged into one
+  /// chronological list (newest first). Powers the Points History screen.
+  /// Earned entries are labeled "{Booth Name}-{Game}" when the session has
+  /// a resolvable exhibitorId, or just "{Game}" otherwise (e.g. a game
+  /// played before booth-scoping existed, or a booth that's since been
+  /// removed/unclaimed). Spend entries are labeled "Redeemed: {Reward
+  /// Name}".
+  ///
+  /// One-shot Future (not a Stream) merging 2 bounded queries — same
+  /// client-side-merge trade-off as [getRecentBoothActivity] below; this
+  /// project has no rxdart dependency to combine two live streams, and a
+  /// pull-to-refresh on the Points History screen is enough at prototype
+  /// scale.
+  Future<List<PointsLedgerEntry>> getPointsLedger(String uid) async {
+    final sessions = await _db
+        .collection('game_sessions')
+        .where('uid', isEqualTo: uid)
+        .orderBy('playedAt', descending: true)
+        .limit(200)
+        .get();
+    final redemptions = await _db
+        .collection('redemptions')
+        .where('userId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(200)
+        .get();
+
+    // Batch-resolve booth names for every distinct exhibitorId referenced
+    // by an earned session (whereIn caps at 30 ids per query).
+    // `exhibitors` is openly readable by any signed-in user
+    // (allow read: if isSignedIn();), so this lookup is safe for a normal
+    // visitor — unlike the `users`-collection lookup fixed in
+    // getExhibitorLeaderboard() above.
+    final exhibitorIds = sessions.docs
+        .map((d) => d.data()['exhibitorId'] as String?)
+        .whereType<String>()
+        .toSet()
+        .toList();
+    final boothNames = <String, String>{};
+    for (var i = 0; i < exhibitorIds.length; i += 30) {
+      final chunk =
+          exhibitorIds.sublist(i, (i + 30).clamp(0, exhibitorIds.length));
+      if (chunk.isEmpty) continue;
+      final snap = await _db
+          .collection('exhibitors')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      for (final d in snap.docs) {
+        boothNames[d.id] = (d.data()['name'] as String?) ?? '';
+      }
+    }
+
+    final entries = <PointsLedgerEntry>[];
+    for (final d in sessions.docs) {
+      final data = d.data();
+      final ts = data['playedAt'] as Timestamp?;
+      final points = (data['points'] as num?)?.toInt() ?? 0;
+      final gameType = data['gameType'] as String? ?? '';
+      final gameLabel = kGameTypes
+          .firstWhere((g) => g.key == gameType,
+              orElse: () => GameTypeDef(
+                  gameType, 'a game', '🎮', Icons.videogame_asset_rounded))
+          .label;
+      final exhibitorId = data['exhibitorId'] as String?;
+      final boothName = exhibitorId != null ? boothNames[exhibitorId] : null;
+      final label = (boothName != null && boothName.isNotEmpty)
+          ? '$boothName-$gameLabel'
+          : gameLabel;
+      entries.add(PointsLedgerEntry(
+        type: PointsLedgerEntryType.earned,
+        label: label,
+        points: points,
+        time: ts?.toDate(),
+        gameType: gameType,
+      ));
+    }
+    for (final d in redemptions.docs) {
+      final data = d.data();
+      final ts = data['createdAt'] as Timestamp?;
+      final pointsSpent = (data['pointsSpent'] as num?)?.toInt() ?? 0;
+      final rewardName = data['rewardName'] as String? ?? 'a reward';
+      // The original spend line always stays, even for a redemption that
+      // later got refunded (see below) — this is the historical fact that
+      // it WAS spent at the time, not a live balance.
+      entries.add(PointsLedgerEntry(
+        type: PointsLedgerEntryType.spent,
+        label: 'Redeemed: $rewardName',
+        points: pointsSpent,
+        time: ts?.toDate(),
+      ));
+
+      // A refunded redemption additionally gets its own credit line at the
+      // moment it was refunded (cancelAndRefundRedemption() stamps
+      // `updatedAt` when it flips `status` to refunded) — same document,
+      // no extra Firestore read needed. Falls back to `createdAt` on the
+      // off chance `updatedAt` is still an unresolved server timestamp
+      // locally, so the entry never silently disappears to the bottom of
+      // the sort instead of showing where a null time would push it.
+      if (data['status'] == RedemptionStatus.refunded) {
+        final refundTs = data['updatedAt'] as Timestamp? ?? ts;
+        entries.add(PointsLedgerEntry(
+          type: PointsLedgerEntryType.refunded,
+          label: 'Refunded: $rewardName',
+          points: pointsSpent,
+          time: refundTs?.toDate(),
+        ));
+      }
+    }
+
+    entries.sort((a, b) {
+      final at = a.time;
+      final bt = b.time;
+      if (at == null && bt == null) return 0;
+      if (at == null) return 1;
+      if (bt == null) return -1;
+      return bt.compareTo(at);
+    });
+    return entries;
+  }
+
   // ═══════════════════════════════════════════════════════════════════════
   //  PUZZLES
   // ═══════════════════════════════════════════════════════════════════════
@@ -937,14 +1075,32 @@ class FirestoreService {
 
       final uids = totals.keys.toList();
       // Batch-fetch display names (whereIn caps at 30 ids per query).
+      //
+      // Reads from `leaderboard`, NOT `users` — `users/{uid}`'s security
+      // rule only allows `get` on your OWN doc (or Super Admin); a `list`/
+      // `whereIn` query against `users` requires isSuperAdmin() outright
+      // (see firestore.rules), so a normal visitor viewing ANY per-booth
+      // leaderboard with at least one participant got a silent
+      // PERMISSION_DENIED here, which errored the whole stream and made
+      // leaderboard_screen.dart's StreamBuilder (which doesn't check
+      // snap.hasError) render the ordinary empty state — this was the
+      // actual, confirmed cause of "the leaderboard per booth still can't
+      // see anything," found by comparing this query against the deployed
+      // rules. `leaderboard/{uid}` is openly readable by any signed-in
+      // user (same collection the global/per-game leaderboards already
+      // read from for display names), so this fetches the same
+      // information from a collection this query is actually allowed to
+      // list. A visitor who never earned points (every play scored 0)
+      // has no `leaderboard` doc — falls back to 'Player' below, same as
+      // before.
       final names = <String, String>{};
       for (var i = 0; i < uids.length; i += 30) {
         final chunk = uids.sublist(i, (i + 30).clamp(0, uids.length));
-        final usersSnap = await _db
-            .collection('users')
+        final leaderboardSnap = await _db
+            .collection('leaderboard')
             .where(FieldPath.documentId, whereIn: chunk)
             .get();
-        for (final d in usersSnap.docs) {
+        for (final d in leaderboardSnap.docs) {
           names[d.id] = (d.data()['displayName'] as String?) ?? 'Player';
         }
       }
@@ -1155,8 +1311,13 @@ class FirestoreService {
   Future<RedemptionOutcome> cancelAndRefundRedemption(
       String redemptionId) async {
     final redemptionRef = _db.collection('redemptions').doc(redemptionId);
+    // Captured inside the transaction so the post-transaction notification
+    // below (same "notify outside the transaction" pattern as
+    // redeemReward()) knows who to notify and what to say, without a
+    // second read.
+    RedemptionModel? refunded;
 
-    return _db.runTransaction<RedemptionOutcome>((tx) async {
+    final outcome = await _db.runTransaction<RedemptionOutcome>((tx) async {
       final redemptionSnap = await tx.get(redemptionRef);
       if (!redemptionSnap.exists) {
         return const RedemptionOutcome.failure('not_found');
@@ -1192,8 +1353,45 @@ class FirestoreService {
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
-      return const RedemptionOutcome.success(null);
+      refunded = redemption;
+      return RedemptionOutcome.success(redemptionRef.id);
     });
+
+    // Notify outside the transaction, same pattern as redeemReward() above
+    // — every redemption requires a registered account (see the
+    // registration-gate helper below), so the recipient's email is always
+    // real by the time this runs. Reuses type: 'redemption' so it renders
+    // with the same voucher icon as a normal redemption notification
+    // (notifications_screen.dart only branches on 'redemption' vs.
+    // everything else) rather than needing a new icon mapping.
+    //
+    // Unlike redeemReward()'s notify call, THIS one is written by the
+    // Super Admin's own account on behalf of a different uid (the visitor
+    // being refunded) — the one notify call in this whole app where the
+    // writer and the notified uid differ. That needs firestore.rules'
+    // `notifications`/`email_log` create rules to explicitly allow
+    // isSuperAdmin() (fixed alongside this — see those rules' comments),
+    // so this is wrapped in try/catch the way logGameSession() treats its
+    // own write as non-critical: the refund itself (points/stock/status,
+    // already committed above) must never be undone or reported as failed
+    // just because the follow-up notification couldn't be written (e.g.
+    // the rules fix above hasn't been redeployed yet).
+    if (outcome.success && refunded != null) {
+      try {
+        await _notifyUser(
+          uid: refunded!.userId,
+          title: '🔄 Redemption Refunded',
+          body: 'Sorry, your redemption of "${refunded!.rewardName}" could '
+              'not be fulfilled, so we\'ve refunded ${refunded!.pointsSpent} '
+              'points back to your account. If you have any query, please '
+              'email funkits@support.com.my.',
+          type: 'redemption',
+        );
+      } catch (e) {
+        debugPrint('cancelAndRefundRedemption: notify failed: $e');
+      }
+    }
+    return outcome;
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -1377,6 +1575,125 @@ class FirestoreService {
       'totalPlays': totalPlays,
       'pointsDistributed': pointsDistributed,
     };
+  }
+
+  /// Same 3 counts as [getBoothStats], filtered to just today (device-local
+  /// midnight to now) — powers the Exhibitor Dashboard Overview tab's "+N
+  /// today" trend line on each stat tile. One-shot, same client-side
+  /// counting trade-off as [getBoothStats]; if Firestore reports a missing
+  /// composite index the first time this runs, its error includes a direct
+  /// link to auto-create it (same as any other query in this app).
+  Future<Map<String, int>> getBoothStatsToday(String boothId) async {
+    final startOfToday = DateTime(
+        DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final todayTs = Timestamp.fromDate(startOfToday);
+    final checkIns = await _db
+        .collection('booth_checkins')
+        .where('boothId', isEqualTo: boothId)
+        .where('checkedInAt', isGreaterThanOrEqualTo: todayTs)
+        .get();
+    final sessions = await _db
+        .collection('game_sessions')
+        .where('exhibitorId', isEqualTo: boothId)
+        .where('playedAt', isGreaterThanOrEqualTo: todayTs)
+        .get();
+    var pointsToday = 0;
+    for (final doc in sessions.docs) {
+      pointsToday += (doc.data()['points'] as num?)?.toInt() ?? 0;
+    }
+    return {
+      'checkIns': checkIns.docs.length,
+      'totalPlays': sessions.docs.length,
+      'pointsDistributed': pointsToday,
+    };
+  }
+
+  /// True if the exhibitor has saved real content for at least one of the 4
+  /// prize games (Spin Wheel/Scratch Card/Guess the Number/Memory Cards) —
+  /// unlike the 6 generic games (enabled by default), these require actual
+  /// exhibitor setup before they do anything, so this is what the Overview
+  /// tab's setup checklist checks for a meaningful "game set up" signal.
+  Future<bool> hasAnyPrizeGameConfigured(String boothId) async {
+    const prizeGameTypes = [
+      'spin_wheel',
+      'scratch_card',
+      'guess_number',
+      'memory_matrix',
+    ];
+    for (final gameType in prizeGameTypes) {
+      final snap = await _gameContentRef(boothId, gameType).get();
+      if (snap.exists) return true;
+    }
+    return false;
+  }
+
+  /// The booth's most recent activity, merged from check-ins, game plays,
+  /// and prize wins, newest first — powers the Overview tab's activity
+  /// feed. One-shot client-side merge over 3 bounded queries; visitor
+  /// identity is never included for check-ins/plays (matches this app's
+  /// existing no-PII convention for those collections) — only prize wins
+  /// carry a name, and masking that (see maskWinnerName) is left to the UI,
+  /// same convention as [getRecentPrizeWins].
+  Future<List<BoothActivityEvent>> getRecentBoothActivity(String boothId,
+      {int limit = 8}) async {
+    final checkins = await _db
+        .collection('booth_checkins')
+        .where('boothId', isEqualTo: boothId)
+        .orderBy('checkedInAt', descending: true)
+        .limit(limit)
+        .get();
+    final sessions = await _db
+        .collection('game_sessions')
+        .where('exhibitorId', isEqualTo: boothId)
+        .orderBy('playedAt', descending: true)
+        .limit(limit)
+        .get();
+    final wins = await _db
+        .collection('prize_wins')
+        .where('boothId', isEqualTo: boothId)
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .get();
+
+    final events = <BoothActivityEvent>[];
+    for (final d in checkins.docs) {
+      final ts = d.data()['checkedInAt'] as Timestamp?;
+      if (ts == null) continue;
+      events.add(BoothActivityEvent(
+        type: BoothActivityType.checkIn,
+        text: 'A visitor checked in',
+        time: ts.toDate(),
+      ));
+    }
+    for (final d in sessions.docs) {
+      final ts = d.data()['playedAt'] as Timestamp?;
+      if (ts == null) continue;
+      final gameType = d.data()['gameType'] as String? ?? '';
+      final label = kGameTypes
+          .firstWhere((g) => g.key == gameType,
+              orElse: () => GameTypeDef(
+                  gameType, 'a game', '🎮', Icons.videogame_asset_rounded))
+          .label;
+      events.add(BoothActivityEvent(
+        type: BoothActivityType.play,
+        text: 'A visitor played $label',
+        time: ts.toDate(),
+      ));
+    }
+    for (final d in wins.docs) {
+      final ts = d.data()['createdAt'] as Timestamp?;
+      if (ts == null) continue;
+      events.add(BoothActivityEvent(
+        type: BoothActivityType.win,
+        text: '${d.data()['userName'] as String? ?? 'A visitor'} won '
+            '${d.data()['prizeLabel'] as String? ?? 'a prize'}',
+        time: ts.toDate(),
+        rawWinnerName: d.data()['userName'] as String?,
+        prizeLabel: d.data()['prizeLabel'] as String?,
+      ));
+    }
+    events.sort((a, b) => b.time.compareTo(a.time));
+    return events.take(limit).toList();
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -1812,4 +2129,59 @@ class BoothAttemptPool {
 
   int get attemptsRemaining =>
       (attemptsGranted - attemptsUsed).clamp(0, attemptsGranted);
+}
+
+/// Which collection a [BoothActivityEvent] came from — lets the UI pick an
+/// icon without re-deriving it from the event text.
+enum BoothActivityType { checkIn, play, win }
+
+/// One entry in the Exhibitor Dashboard Overview tab's recent-activity
+/// feed — see [FirestoreService.getRecentBoothActivity]. [text] is already
+/// display-ready for check-ins/plays (no visitor identity, per this app's
+/// no-PII convention for those collections); for a win, [text] embeds the
+/// RAW winner name — the UI is responsible for masking it (via
+/// maskWinnerName) before display, same convention as prize_wins is
+/// treated everywhere else in this app. [rawWinnerName]/[prizeLabel] are
+/// exposed separately so the UI can rebuild a masked version without
+/// string-parsing [text].
+class BoothActivityEvent {
+  final BoothActivityType type;
+  final String text;
+  final DateTime time;
+  final String? rawWinnerName;
+  final String? prizeLabel;
+
+  const BoothActivityEvent({
+    required this.type,
+    required this.text,
+    required this.time,
+    this.rawWinnerName,
+    this.prizeLabel,
+  });
+}
+
+/// Whether a [PointsLedgerEntry] added to or subtracted from the visitor's
+/// balance — the Points History screen renders these with a "+"/"-" sign
+/// and a distinct color rather than storing the sign in [points] itself.
+/// [refunded] is its own kind (not folded into [earned]) so it gets its own
+/// "Total Points Refunded" summary card, separate from points earned by
+/// actually playing — see [FirestoreService.getPointsLedger].
+enum PointsLedgerEntryType { earned, spent, refunded }
+
+/// One line in a visitor's combined points ledger — see
+/// [FirestoreService.getPointsLedger].
+class PointsLedgerEntry {
+  final PointsLedgerEntryType type;
+  final String label;
+  final int points; // always positive; sign applied at render time
+  final DateTime? time;
+  final String gameType; // '' for a spend entry
+
+  const PointsLedgerEntry({
+    required this.type,
+    required this.label,
+    required this.points,
+    required this.time,
+    this.gameType = '',
+  });
 }

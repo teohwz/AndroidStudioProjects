@@ -259,7 +259,18 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && !isAnonymousUser()
         && request.resource.data.userId == request.auth.uid
-        && request.resource.data.status == 'Pending Delivery'
+        // FIX (2026-09-12): this literal was 'Pending Delivery' (the
+        // human-readable display label from redemptionStatusLabel()) but
+        // RedemptionModel/RedemptionStatus.pendingDelivery actually stores
+        // the machine-readable value 'pending_delivery' — the exact string
+        // redeemReward()'s transaction writes. The mismatch meant this
+        // `create` rule NEVER matched a real redemption, so the whole
+        // transaction (reward stock decrement + user points decrement +
+        // this redemption doc) was rejected and rolled back atomically on
+        // every single redemption attempt — the visitor's points were
+        // never actually deducted and no redemption record was ever
+        // written, exactly matching the reported bug.
+        && request.resource.data.status == 'pending_delivery'
         && request.resource.data.refunded == false
         && request.resource.data.deliveryEmail is string
         && request.resource.data.deliveryEmail.size() > 0
@@ -527,9 +538,18 @@ service cloud.firestore {
     match /notifications/{id} {
       allow get: if isOwner(resource.data.uid);
       allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      // A visitor may only ever create a notification for THEMSELVES (every
+      // prize-win/redemption notification is written by the same account
+      // that just won/redeemed). Super Admin is also allowed to create one
+      // for ANY uid — needed by cancelAndRefundRedemption()'s "🔄
+      // Redemption Refunded" notification, which is written by the Super
+      // Admin's own account on behalf of the visitor being refunded, not by
+      // that visitor themselves. Without this, that write is
+      // PERMISSION_DENIED — the confirmed cause of "why no notification?"
+      // after a Super Admin refund.
       allow create: if isSignedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.read == false;
+        && request.resource.data.read == false
+        && (request.resource.data.uid == request.auth.uid || isSuperAdmin());
       allow update: if isOwner(resource.data.uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       allow delete: if false;
@@ -544,7 +564,13 @@ service cloud.firestore {
     // ═══════════════════════════════════════════════════════════════════════
     match /email_log/{id} {
       allow read: if false;
-      allow create: if isSignedIn() && request.resource.data.toUid == request.auth.uid;
+      // Same Super-Admin-acting-on-behalf-of-a-visitor exception as
+      // `notifications` above (cancelAndRefundRedemption()'s email_log
+      // write for a refund has `toUid` set to the VISITOR being refunded,
+      // not the Super Admin who triggered it) — without this, `_notifyUser`
+      // would throw here too, after already succeeding on `notifications`.
+      allow create: if isSignedIn()
+        && (request.resource.data.toUid == request.auth.uid || isSuperAdmin());
       allow update, delete: if false;
     }
 

@@ -286,17 +286,32 @@ class _RedemptionDetailDialogState extends State<_RedemptionDetailDialog> {
     if (ok != true) return;
 
     setState(() => _busy = true);
-    final outcome =
-        await widget.fs.cancelAndRefundRedemption(widget.redemption.id);
-    if (!mounted) return;
-    setState(() => _busy = false);
-    if (outcome.success) {
-      Navigator.pop(context);
-    } else {
-      final msg = outcome.failureReason == 'already_refunded'
-          ? 'This redemption was already refunded — it cannot be refunded again.'
-          : 'Could not refund this redemption.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    try {
+      final outcome =
+          await widget.fs.cancelAndRefundRedemption(widget.redemption.id);
+      if (!mounted) return;
+      setState(() => _busy = false);
+      if (outcome.success) {
+        Navigator.pop(context);
+      } else {
+        final msg = outcome.failureReason == 'already_refunded'
+            ? 'This redemption was already refunded — it cannot be refunded again.'
+            : 'Could not refund this redemption.';
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(msg)));
+      }
+    } catch (e) {
+      // Defensive: cancelAndRefundRedemption() already isolates its own
+      // notify-the-visitor step so it can't throw from here (see that
+      // method's comment), but this still guards against any other
+      // unexpected failure leaving _busy stuck forever with no visible
+      // feedback — same "must not fail silently" fix already applied to
+      // shop_screen.dart's redeem flow earlier this session.
+      debugPrint('_confirmRefund: $e');
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Something went wrong — please try again.')));
     }
   }
 

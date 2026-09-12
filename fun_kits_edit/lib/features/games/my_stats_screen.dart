@@ -198,6 +198,20 @@ class _GameAgg {
   double get avgPoints => count == 0 ? 0 : totalPoints / count;
 }
 
+/// Picks a "nice" round step for a chart axis — 5/10/20/25/50/100 — sized
+/// to roughly the given value, so `value` rounded up to a multiple of the
+/// result always lands on a whole, evenly-spaced tick. Used by
+/// [_AvgScoreChart] to avoid fl_chart's default behavior of always
+/// labeling the exact (often fractional) `maxY` value even when it falls
+/// between two regular ticks.
+double _niceAxisInterval(double value) {
+  if (value <= 20) return 5;
+  if (value <= 50) return 10;
+  if (value <= 100) return 20;
+  if (value <= 250) return 50;
+  return 100;
+}
+
 class _AvgScoreChart extends StatelessWidget {
   const _AvgScoreChart({required this.games, required this.byGame});
   final List<GameTypeDef> games;
@@ -215,10 +229,23 @@ class _AvgScoreChart extends StatelessWidget {
     final maxAvg = games
         .map((g) => byGame[g.key]!.avgPoints)
         .fold<double>(0, (a, b) => b > a ? b : a);
+    // Round the axis top up to a clean multiple of a "nice" interval,
+    // instead of leaving it as raw `maxAvg * 1.25` (e.g. 29.1). Without an
+    // explicit `interval` below, fl_chart auto-picks its own left-axis
+    // interval AND always draws one extra label exactly at `maxY` — when
+    // maxY is a fractional, off-grid value like 29.1, that extra label
+    // doesn't line up with the regular 0/5/10/.../25 ticks and visually
+    // overlaps/wraps with the one just below it (the bug in the
+    // screenshot). Rounding maxY up to the same interval used for the
+    // ticks means the top label always lands exactly on a normal tick
+    // instead of needing an extra one.
+    final rawMax = maxAvg <= 0 ? 10.0 : maxAvg * 1.25;
+    final interval = _niceAxisInterval(rawMax);
+    final maxY = (rawMax / interval).ceil() * interval;
     return BarChart(
       BarChartData(
         alignment: BarChartAlignment.spaceAround,
-        maxY: maxAvg <= 0 ? 10 : maxAvg * 1.25,
+        maxY: maxY,
         barTouchData: BarTouchData(enabled: false),
         gridData: const FlGridData(show: false),
         borderData: FlBorderData(show: false),
@@ -228,7 +255,15 @@ class _AvgScoreChart extends StatelessWidget {
           rightTitles:
               const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           leftTitles: AxisTitles(
-            sideTitles: SideTitles(showTitles: true, reservedSize: 32),
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 32,
+              interval: interval,
+              getTitlesWidget: (value, meta) => Text(
+                value.toInt().toString(),
+                style: TextStyle(fontSize: 11, color: palette.textMedium),
+              ),
+            ),
           ),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(

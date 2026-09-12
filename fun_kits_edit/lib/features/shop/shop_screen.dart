@@ -83,12 +83,35 @@ class _ShopScreenState extends State<ShopScreen> {
     if (result == null || !mounted) return;
 
     setState(() => _busy = true);
-    final outcome = await _fs.redeemReward(
-      uid: currentUser.uid,
-      rewardId: reward.id,
-      deliveryEmail: result.email,
-      accountEmail: currentUser.email,
-    );
+    RedemptionOutcome outcome;
+    try {
+      outcome = await _fs.redeemReward(
+        uid: currentUser.uid,
+        rewardId: reward.id,
+        deliveryEmail: result.email,
+        accountEmail: currentUser.email,
+      );
+    } catch (e) {
+      // Previously an exception here (e.g. a Firestore permission-denied
+      // from an undeployed/mismatched security rule, a network drop
+      // mid-transaction, anything) propagated straight out of this async
+      // handler uncaught: no dialog, no snackbar, nothing shown to the
+      // visitor, `_busy` stuck true forever (silently disabling further
+      // redeem taps until the screen reloaded), and — since the whole
+      // transaction aborts on any thrown error — neither the points
+      // deduction nor the redemption record were ever written. That
+      // matched a real bug report: "the point didn't deduct at all and I
+      // can't see it in my redemption history." Surfacing it here makes a
+      // failed redemption visible (and un-stuck) instead of silently
+      // vanishing; check the debug console for the logged error to see
+      // the actual cause.
+      debugPrint('redeemReward failed: $e');
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Something went wrong — please try again.')));
+      return;
+    }
     if (!mounted) return;
     setState(() => _busy = false);
 
@@ -196,7 +219,15 @@ class _ShopScreenState extends State<ShopScreen> {
                                   crossAxisCount: 2,
                                   mainAxisSpacing: 14,
                                   crossAxisSpacing: 14,
-                                  childAspectRatio: 0.72,
+                                  // Was 0.72 — too tight for the fixed-height
+                                  // content block below the image (title +
+                                  // subtitle + points row + button, each with
+                                  // fixed padding), causing a consistent
+                                  // ~14px bottom overflow on every card
+                                  // regardless of reward name length. Lowered
+                                  // to give each cell enough height with a
+                                  // safety margin across phone widths.
+                                  childAspectRatio: 0.62,
                                 ),
                                 itemCount: rewards.length,
                                 itemBuilder: (_, i) {
@@ -570,8 +601,7 @@ class _RedeemConfirmationDialogState
               ),
               const SizedBox(height: 8),
               Text(
-                'This is a demo — no real voucher code is issued. Your '
-                'e-voucher will show as "Pending Delivery" after redemption.',
+                'Your e-voucher will show as "Pending Delivery" after redemption.',
                 style: TextStyle(fontSize: 11, color: palette.textMedium),
               ),
             ],
