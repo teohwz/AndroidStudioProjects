@@ -258,10 +258,26 @@ class _RedemptionDetailDialogState extends State<_RedemptionDetailDialog> {
 
   Future<void> _applyStatus() async {
     setState(() => _busy = true);
-    await widget.fs.updateRedemptionStatus(widget.redemption.id, _status);
-    if (mounted) {
+    try {
+      await widget.fs.updateRedemptionStatus(widget.redemption.id, _status);
+      if (mounted) {
+        setState(() => _busy = false);
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      // Defensive, same fix as _confirmRefund() above: without this, any
+      // failed write here left `_busy` stuck true forever (nothing after
+      // the throwing await ever runs), which permanently greys out BOTH
+      // "Save Status" and "Close" (both gated on `_busy`) — the dialog
+      // stays open with no working button except dismissing it via the
+      // barrier/back gesture. This is exactly the "after they click
+      // refund, they can't change the status dropdown and save status
+      // anymore, they can only use close" report.
+      debugPrint('_applyStatus: $e');
+      if (!mounted) return;
       setState(() => _busy = false);
-      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Something went wrong — please try again.')));
     }
   }
 
@@ -341,17 +357,46 @@ class _RedemptionDetailDialogState extends State<_RedemptionDetailDialog> {
             const Text('Status',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
             const SizedBox(height: 6),
-            DropdownButtonFormField<String>(
-              value: _status,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                  isDense: true, border: OutlineInputBorder()),
-              items: RedemptionStatus.all
-                  .map((s) => DropdownMenuItem(
-                      value: s, child: Text(redemptionStatusLabel(s))))
-                  .toList(),
-              onChanged: (v) => setState(() => _status = v ?? _status),
-            ),
+            // Once refunded, the status is locked to "Refunded" — a refund
+            // moves points/stock back, so re-editing the status to anything
+            // else afterwards (e.g. back to "Processing") would be
+            // misleading about what actually happened. Only the fulfillment
+            // statuses (Pending Delivery/Processing/Delivered/Cancelled)
+            // stay editable via the dropdown; "Refunded" itself is reached
+            // only through the "Cancel & Refund" action below, never picked
+            // from this list directly.
+            if (r.refunded)
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  color: palette.danger.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: palette.danger.withOpacity(0.3)),
+                ),
+                child: Text(redemptionStatusLabel(RedemptionStatus.refunded),
+                    style: TextStyle(
+                        color: palette.danger, fontWeight: FontWeight.w700)),
+              )
+            else
+              DropdownButtonFormField<String>(
+                value: _status,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                    isDense: true, border: OutlineInputBorder()),
+                // A fulfillment status can never be hand-picked as
+                // "Refunded" from here — that value only ever appears once
+                // the redemption has actually gone through the "Cancel &
+                // Refund" transaction below (points/stock really moved), so
+                // it's excluded from this dropdown's own choices.
+                items: RedemptionStatus.all
+                    .where((s) => s != RedemptionStatus.refunded)
+                    .map((s) => DropdownMenuItem(
+                        value: s, child: Text(redemptionStatusLabel(s))))
+                    .toList(),
+                onChanged: (v) => setState(() => _status = v ?? _status),
+              ),
             const SizedBox(height: 14),
             if (r.refunded)
               Row(
@@ -389,10 +434,13 @@ class _RedemptionDetailDialogState extends State<_RedemptionDetailDialog> {
         TextButton(
             onPressed: _busy ? null : () => Navigator.pop(context),
             child: const Text('Close')),
-        FilledButton(
-          onPressed: _busy ? null : _applyStatus,
-          child: const Text('Save Status'),
-        ),
+        // Nothing left to save once refunded — the status is locked (see
+        // above), so "Save Status" would have no target value to apply.
+        if (!r.refunded)
+          FilledButton(
+            onPressed: _busy ? null : _applyStatus,
+            child: const Text('Save Status'),
+          ),
       ],
     );
   }
