@@ -51,10 +51,16 @@ class ManageUsersScreen extends StatefulWidget {
   State<ManageUsersScreen> createState() => _ManageUsersScreenState();
 }
 
+// Status filter for the list below — 'Banned' also unlocks the quick
+// one-tap Unban button on each row (see _UserListTile.onQuickUnban), so a
+// Super Admin doesn't have to open the detail drawer just to unban someone.
+enum _StatusFilter { all, active, banned }
+
 class _ManageUsersScreenState extends State<ManageUsersScreen> {
   final _fs = FirestoreService();
   final _searchCtrl = TextEditingController();
   String _search = '';
+  _StatusFilter _statusFilter = _StatusFilter.all;
 
   @override
   void dispose() {
@@ -64,8 +70,13 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
 
   List<Map<String, dynamic>> _applyFilter(List<Map<String, dynamic>> all) {
     final q = _search.trim().toLowerCase();
-    if (q.isEmpty) return all;
     return all.where((u) {
+      if (_statusFilter != _StatusFilter.all) {
+        final banned = ((u['accountStatus'] as String?) ?? 'active') == 'banned';
+        if (_statusFilter == _StatusFilter.banned && !banned) return false;
+        if (_statusFilter == _StatusFilter.active && banned) return false;
+      }
+      if (q.isEmpty) return true;
       final name = (u['displayName'] ?? '').toString().toLowerCase();
       final email = (u['email'] ?? '').toString().toLowerCase();
       final uid = (u['uid'] ?? '').toString().toLowerCase();
@@ -78,6 +89,39 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       context: context,
       builder: (_) => _UserDetailDialog(user: user, fs: _fs),
     );
+  }
+
+  // One-tap unban straight from the "Banned" filtered list — same
+  // confirm-then-write flow as _UserDetailDialogState._toggleBan, just
+  // without needing to open the detail drawer first.
+  Future<void> _quickUnban(Map<String, dynamic> user) async {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    final name = (user['displayName'] as String?)?.trim();
+    final email = (user['email'] as String?)?.trim();
+    final label =
+        (name != null && name.isNotEmpty) ? name : (email ?? 'This user');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Unban this user?'),
+        content: Text('$label will be able to sign in and play again.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: FilledButton.styleFrom(backgroundColor: palette.success),
+              child: const Text('Unban')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _fs.setUserStatus(user['uid'] as String, 'active');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$label has been unbanned.')));
+    }
   }
 
   @override
@@ -115,6 +159,23 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
               onChanged: (v) => setState(() => _search = v),
             ),
           ),
+          Container(
+            width: double.infinity,
+            color: theme.colorScheme.surface,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            child: SegmentedButton<_StatusFilter>(
+              segments: const [
+                ButtonSegment(value: _StatusFilter.all, label: Text('All')),
+                ButtonSegment(
+                    value: _StatusFilter.active, label: Text('Active')),
+                ButtonSegment(
+                    value: _StatusFilter.banned, label: Text('Banned')),
+              ],
+              selected: {_statusFilter},
+              onSelectionChanged: (s) =>
+                  setState(() => _statusFilter = s.first),
+            ),
+          ),
           const Divider(height: 1),
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
@@ -139,6 +200,9 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       user: u,
                       isSelf: u['uid'] == myUid,
                       onTap: () => _openDetail(u),
+                      onQuickUnban: _statusFilter == _StatusFilter.banned
+                          ? () => _quickUnban(u)
+                          : null,
                     );
                   },
                 );
@@ -152,11 +216,19 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
 }
 
 class _UserListTile extends StatelessWidget {
-  const _UserListTile(
-      {required this.user, required this.isSelf, required this.onTap});
+  const _UserListTile({
+    required this.user,
+    required this.isSelf,
+    required this.onTap,
+    this.onQuickUnban,
+  });
   final Map<String, dynamic> user;
   final bool isSelf;
   final VoidCallback onTap;
+  // Non-null only when the "Banned" filter is active (see
+  // _ManageUsersScreenState.build) — shows a one-tap Unban button on this
+  // row instead of requiring the detail drawer.
+  final VoidCallback? onQuickUnban;
 
   @override
   Widget build(BuildContext context) {
@@ -220,6 +292,26 @@ class _UserListTile extends StatelessWidget {
                     _Badge(label: 'Banned', color: palette.danger)
                   else if (isSelf)
                     _Badge(label: 'You', color: palette.success),
+                  if (onQuickUnban != null) ...[
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      height: 26,
+                      child: OutlinedButton.icon(
+                        onPressed: onQuickUnban,
+                        icon: Icon(Icons.lock_open_rounded,
+                            size: 14, color: palette.success),
+                        label: Text('Unban',
+                            style: TextStyle(
+                                fontSize: 11, color: palette.success)),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          side: BorderSide(color: palette.success),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],

@@ -437,6 +437,14 @@ class _CommerceBody extends StatelessWidget {
           onTap: () =>
               Navigator.pushNamed(context, AppRoutes.manageRedemptions),
         ),
+        DenseMenuRow(
+          icon: Icons.summarize_rounded,
+          title: 'Reports & Export',
+          subtitle: 'CSV exports for a post-exhibition wrap-up',
+          color: palette.gold,
+          onTap: () =>
+              Navigator.pushNamed(context, AppRoutes.reportsExport),
+        ),
       ],
     );
   }

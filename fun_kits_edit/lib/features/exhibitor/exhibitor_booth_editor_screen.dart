@@ -6,6 +6,7 @@ import '../../core/models/exhibitor_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/services/storage_service.dart';
 import '../../core/theme/app_palette.dart';
+import 'booth_preview_screen.dart';
 
 /// An exhibitor's own booth customization form — name, logo, banner,
 /// colors, background, welcome message, description. Everything here is
@@ -163,6 +164,34 @@ class _ExhibitorBoothEditorScreenState
     }
   }
 
+  /// Opens a read-only preview of how a visitor will see this booth, built
+  /// from whatever is currently on the form right now — including a
+  /// logo/banner just uploaded, unsaved color picks, and unsaved text
+  /// fields — not from what's already saved. Doesn't require the form to
+  /// pass validation first: this is a look-only check, not a save.
+  void _openPreview() {
+    if (_current == null) return;
+    final preview = _current!.copyWith(
+      name: _nameCtrl.text.trim(),
+      description: _descCtrl.text.trim(),
+      contactEmail: _emailCtrl.text.trim(),
+      contactPhone: _phoneCtrl.text.trim(),
+      website: _websiteCtrl.text.trim(),
+      facebookUrl: _facebookCtrl.text.trim(),
+      instagramUrl: _instagramCtrl.text.trim(),
+      welcomeMessage: _welcomeCtrl.text.trim(),
+      themeColorHex: _toHex(_primary),
+      secondaryColorHex: _toHex(_secondary),
+      backgroundColorHex: _toHex(_background),
+      logoUrl: _logoUrl,
+      bannerImageUrl: _bannerUrl,
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => BoothPreviewScreen(exhibitor: preview)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -174,6 +203,13 @@ class _ExhibitorBoothEditorScreenState
             style: TextStyle(fontWeight: FontWeight.w800)),
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.visibility_rounded),
+            tooltip: 'Preview as visitor',
+            onPressed: _initialized ? _openPreview : null,
+          ),
+        ],
       ),
       body: StreamBuilder<ExhibitorModel?>(
         stream: _fs.watchExhibitor(widget.boothId),

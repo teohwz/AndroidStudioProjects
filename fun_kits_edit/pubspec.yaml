@@ -59,6 +59,14 @@ dependencies:
   # "Follow the Exhibitor" booth task
   url_launcher: ^6.3.2
 
+  # Native "Save As" dialog for Super Admin's CSV exports (Reports & Export
+  # screen) — lets the Super Admin pick a real, visible folder (e.g.
+  # Downloads) to save an export to, distinct from share_plus's OS share
+  # sheet above. Pinned to the well-established 8.x API line rather than
+  # the brand-new 13.0.0 (which reshaped saveFile()'s signature) to avoid
+  # pulling in an untested breaking change.
+  file_picker: ^8.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

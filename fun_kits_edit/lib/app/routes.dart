@@ -25,6 +25,7 @@ import '../features/admin/manage_inventory_screen.dart';
 import '../features/admin/manage_redemptions_screen.dart';
 import '../features/admin/manage_users_screen.dart';
 import '../features/admin/manage_booths_screen.dart';
+import '../features/admin/reports_export_screen.dart';
 import '../features/exhibitor/exhibitor_dashboard_screen.dart';
 import '../core/services/auth_service.dart';
 
@@ -94,6 +95,9 @@ class AppRoutes {
   static const String manageRedemptions = '/super-admin/redemptions';
   static const String manageUsers = '/super-admin/users';
   static const String manageBooths = '/super-admin/booths';
+  // Post-exhibition wrap-up CSV exports (Users/Redemptions/Booth Stats) —
+  // see reports_export_screen.dart.
+  static const String reportsExport = '/super-admin/reports';
 
   static Map<String, WidgetBuilder> get routes => {
         login: (_) => const LoginScreen(),
@@ -126,6 +130,8 @@ class AppRoutes {
             const SuperAdminGuard(child: ManageRedemptionsScreen()),
         manageUsers: (_) => const SuperAdminGuard(child: ManageUsersScreen()),
         manageBooths: (_) => const SuperAdminGuard(child: ManageBoothsScreen()),
+        reportsExport: (_) =>
+            const SuperAdminGuard(child: ReportsExportScreen()),
       };
 }
 
