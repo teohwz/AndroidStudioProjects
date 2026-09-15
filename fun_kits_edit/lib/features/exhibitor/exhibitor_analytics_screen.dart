@@ -191,6 +191,25 @@ class ExhibitorAnalyticsScreen extends StatelessWidget {
       );
 }
 
+/// Smallest "nice" (5/10/20/50/100) axis-label interval that's still close
+/// to the given value, so `value` rounded up to a multiple of the result
+/// always lands on a whole, evenly-spaced tick. Without an explicit
+/// `interval` on a bar chart's left axis, fl_chart auto-picks its own tick
+/// spacing AND always draws one extra label exactly at `maxY` — when
+/// `maxY` is a fractional, off-grid value (e.g. `count * 1.25`), that
+/// extra label doesn't line up with the regular ticks and visually
+/// overlaps/wraps with the one just below it (the garbled-axis bug this
+/// fixes, across all 3 charts on this screen). Same fix already applied to
+/// `my_stats_screen.dart`'s Average-Score-by-Game chart earlier this
+/// project — duplicated here rather than shared, matching this codebase's
+/// existing per-file convention for small chart helpers.
+double _niceAxisInterval(double value) {
+  if (value <= 20) return 5;
+  if (value <= 50) return 10;
+  if (value <= 100) return 20;
+  return 50;
+}
+
 class _DayAgg {
   _DayAgg(this.month, this.day);
   final int month;
@@ -253,11 +272,39 @@ class _PopularityChart extends StatelessWidget {
     }
     final maxCount =
         games.map((g) => byGame[g.key]!).fold<int>(0, (a, b) => b > a ? b : a);
+    // See _niceAxisInterval's doc comment — rounds the axis top up to a
+    // clean multiple of a "nice" interval instead of leaving it as a raw,
+    // often-fractional `count * 1.25`, so the top label always lands
+    // exactly on a normal tick instead of overlapping the one below it.
+    final rawMax = maxCount <= 0 ? 5.0 : maxCount * 1.25;
+    final interval = _niceAxisInterval(rawMax);
+    final maxY = (rawMax / interval).ceil() * interval;
     return BarChart(
       BarChartData(
         alignment: BarChartAlignment.spaceAround,
-        maxY: maxCount <= 0 ? 5 : maxCount * 1.25,
-        barTouchData: BarTouchData(enabled: false),
+        maxY: maxY,
+        // Always-on value labels above each bar, rendered as a "forced"
+        // tooltip (showingTooltipIndicators below) rather than a real
+        // touch interaction — enabled:false keeps taps/highlighting off,
+        // exactly as before. fitInsideVertically/Horizontally keep the
+        // label from ever drawing outside this chart's own box, so it
+        // can't visually spill over into the title/card above or get
+        // clipped — the bars/axes/layout are otherwise unchanged.
+        barTouchData: BarTouchData(
+          enabled: false,
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (_) => Colors.transparent,
+            tooltipPadding: EdgeInsets.zero,
+            tooltipMargin: 6,
+            fitInsideVertically: true,
+            fitInsideHorizontally: true,
+            getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem(
+              rod.toY.round().toString(),
+              TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w800, color: color),
+            ),
+          ),
+        ),
         gridData: const FlGridData(show: false),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
@@ -266,7 +313,17 @@ class _PopularityChart extends StatelessWidget {
           rightTitles:
               const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           leftTitles: AxisTitles(
-            sideTitles: SideTitles(showTitles: true, reservedSize: 32),
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 32,
+              interval: interval,
+              getTitlesWidget: (value, meta) => Text(
+                value.toInt().toString(),
+                style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).extension<AppPalette>()!.textMedium),
+              ),
+            ),
           ),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
@@ -285,7 +342,7 @@ class _PopularityChart extends StatelessWidget {
         ),
         barGroups: [
           for (var i = 0; i < games.length; i++)
-            BarChartGroupData(x: i, barRods: [
+            BarChartGroupData(x: i, showingTooltipIndicators: const [0], barRods: [
               BarChartRodData(
                 toY: byGame[games[i].key]!.toDouble(),
                 color: color,
@@ -321,11 +378,36 @@ class _DailyBarChart extends StatelessWidget {
     }
     final values = dayKeys.map((k) => valueOf(byDay[k]!)).toList();
     final maxVal = values.fold<double>(0, (a, b) => b > a ? b : a);
+    // See _niceAxisInterval's doc comment — rounds the axis top up to a
+    // clean multiple of a "nice" interval instead of leaving it as a raw,
+    // often-fractional `maxVal * 1.25`, so the top label always lands
+    // exactly on a normal tick instead of overlapping the one below it.
+    final rawMax = maxVal <= 0 ? 5.0 : maxVal * 1.25;
+    final interval = _niceAxisInterval(rawMax);
+    final maxY = (rawMax / interval).ceil() * interval;
     return BarChart(
       BarChartData(
         alignment: BarChartAlignment.spaceAround,
-        maxY: maxVal <= 0 ? 5 : maxVal * 1.25,
-        barTouchData: BarTouchData(enabled: false),
+        maxY: maxY,
+        // Always-on value labels above each bar — see the identical
+        // comment in _PopularityChart above for why this uses a "forced"
+        // tooltip instead of a real touch interaction, and how the
+        // fitInside flags keep it from spilling outside this chart's box.
+        barTouchData: BarTouchData(
+          enabled: false,
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (_) => Colors.transparent,
+            tooltipPadding: EdgeInsets.zero,
+            tooltipMargin: 6,
+            fitInsideVertically: true,
+            fitInsideHorizontally: true,
+            getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem(
+              rod.toY.round().toString(),
+              TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w800, color: color),
+            ),
+          ),
+        ),
         gridData: const FlGridData(show: false),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
@@ -334,7 +416,17 @@ class _DailyBarChart extends StatelessWidget {
           rightTitles:
               const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           leftTitles: AxisTitles(
-            sideTitles: SideTitles(showTitles: true, reservedSize: 32),
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 32,
+              interval: interval,
+              getTitlesWidget: (value, meta) => Text(
+                value.toInt().toString(),
+                style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).extension<AppPalette>()!.textMedium),
+              ),
+            ),
           ),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
@@ -361,7 +453,7 @@ class _DailyBarChart extends StatelessWidget {
         ),
         barGroups: [
           for (var i = 0; i < dayKeys.length; i++)
-            BarChartGroupData(x: i, barRods: [
+            BarChartGroupData(x: i, showingTooltipIndicators: const [0], barRods: [
               BarChartRodData(
                 toY: values[i],
                 color: color,
