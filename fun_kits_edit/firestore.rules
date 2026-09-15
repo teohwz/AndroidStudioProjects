@@ -121,6 +121,23 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
+    // Server-side enforcement of a Super Admin ban (users/{uid}.
+    // accountStatus == 'banned'). Before this, a ban was ONLY a client-side
+    // UI gate (app.dart showing a "Suspended" screen once its ban-check
+    // stream noticed) — nothing here actually stopped a banned account's
+    // Firestore writes, so a banned visitor already mid-game (a screen
+    // pushed on top of the reactive root, unaffected by that root swapping
+    // to the Suspended screen underneath it) — or simply faster than that
+    // stream's first snapshot — could keep checking into booths, playing
+    // games, and redeeming rewards indefinitely. Gated onto the specific
+    // actions a banned account must not be able to take: checking into a
+    // booth, recording a game session, and redeeming a reward.
+    function isBanned() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('accountStatus', 'active') == 'banned';
+    }
+
     // Used by the Prize Win Notifications feature's registration gate
     // (Lucky Draw joining, Rewards Shop redemption) — a winner/redeemer
     // always needs a real account to be notified through. Firestore rules
@@ -258,6 +275,7 @@ service cloud.firestore {
 
       allow create: if isSignedIn()
         && !isAnonymousUser()
+        && !isBanned()
         && request.resource.data.userId == request.auth.uid
         // FIX (2026-09-12): this literal was 'Pending Delivery' (the
         // human-readable display label from redemptionStatusLabel()) but
@@ -503,13 +521,13 @@ service cloud.firestore {
 
     match /booth_checkins/{id} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() && !isBanned() && request.resource.data.uid == request.auth.uid;
       allow update, delete: if false;
     }
 
     match /game_sessions/{id} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() && !isBanned() && request.resource.data.uid == request.auth.uid;
       allow update, delete: if false;
     }
 

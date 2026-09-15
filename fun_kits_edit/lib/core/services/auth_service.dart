@@ -203,21 +203,7 @@ class AuthService extends ChangeNotifier {
         _cachedRole = role;
         _roleReadyForUid = user.uid;
         notifyListeners();
-        _roleSub = _db
-            .collection('users')
-            .doc(user.uid)
-            .snapshots()
-            .listen((snap) {
-          if (myGeneration != _authEventGeneration) return;
-          final newRole = snap.data()?['role'] as String? ?? 'visitor';
-          final newBoothId = snap.data()?['boothId'] as String?;
-          _roleReadyForUid = user.uid;
-          if (newRole != _cachedRole || newBoothId != _cachedBoothId) {
-            _cachedRole = newRole;
-            _cachedBoothId = newBoothId;
-            notifyListeners();
-          }
-        });
+        _watchOwnUserDoc(user.uid, myGeneration);
       } else {
         _cachedRole = 'visitor';
         _cachedBoothId = null;
@@ -407,22 +393,91 @@ class AuthService extends ChangeNotifier {
   }
 
   // ── Login ───────────────────────────────────────────────────────────────
+  /// Deliberately fetches `role` AND `accountStatus` from one read (rather
+  /// than calling [getUserRole]) and — like [loginAsVisitor] — suppresses
+  /// the constructor's `authStateChanges()` listener for the whole
+  /// sign-in-and-check window. A banned staff account signing in here has
+  /// the exact same race [loginAsVisitor]'s doc comment describes: this
+  /// screen can itself be the app's bootstrap/root screen, so without
+  /// suppression a banned account's real dashboard could flash into view
+  /// before this method notices the ban and signs back out.
+  ///
+  /// Also rejects a plain `visitor` account, mirroring [loginAsVisitor]'s
+  /// rejection of `exhibitor`/`super_admin` accounts — this screen
+  /// (Exhibitor/Organizer login) is staff-only, so a visitor's credentials
+  /// entered here are signed back out with a message pointing them at the
+  /// Visitor login instead, rather than being let through into whatever
+  /// screen a plain visitor role would otherwise land on.
   Future<String?> login({
     required String email,
     required String password,
   }) async {
+    _suppressAuthBroadcast = true;
+    await _roleSub?.cancel();
+    _roleSub = null;
     try {
       isLoading = true;
       notifyListeners();
       await _auth.signInWithEmailAndPassword(email: email, password: password);
-      _cachedRole = await getUserRole();
+      final uid = _auth.currentUser!.uid;
+      final doc = await _db.collection('users').doc(uid).get();
+      final status = doc.data()?['accountStatus'] as String? ?? 'active';
+      if (status == 'banned') {
+        // Reject before this account's role is ever assigned to
+        // `_cachedRole` — nothing here ever broadcasts a banned account as
+        // successfully signed in with a resolved role.
+        await _auth.signOut();
+        _cachedRole = 'visitor';
+        _cachedBoothId = null;
+        _roleReadyForUid = null;
+        return 'This account has been suspended. Contact the event '
+            'organizers if you think this is a mistake.';
+      }
+      final role = doc.data()?['role'] as String? ?? 'visitor';
+      if (role != 'exhibitor' && role != 'super_admin') {
+        // Plain visitor credentials on the staff-only login screen — reject
+        // and sign back out instead of routing them into the app, same
+        // suppression guarantee as the ban check above so nothing flashes.
+        await _auth.signOut();
+        _cachedRole = 'visitor';
+        _cachedBoothId = null;
+        _roleReadyForUid = null;
+        return 'This is a visitor account. Please use the Visitor login '
+            'instead.';
+      }
+      _cachedRole = role;
+      _roleReadyForUid = uid;
+      final myGeneration = ++_authEventGeneration;
+      _watchOwnUserDoc(uid, myGeneration);
       return null;
     } on FirebaseAuthException catch (e) {
       return e.message;
     } finally {
+      _suppressAuthBroadcast = false;
       isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Sets up (or replaces) the live subscription to `users/{uid}`'s
+  /// `role`/`boothId` fields for whichever account is now confirmed
+  /// signed in — shared by the constructor's `authStateChanges()`
+  /// listener, [login], and [loginAsVisitor] so all three keep this
+  /// behavior identical. [generation] is checked on every emission so a
+  /// subscription left over from a since-superseded auth event can never
+  /// clobber a newer one's state.
+  void _watchOwnUserDoc(String uid, int generation) {
+    _roleSub = _db.collection('users').doc(uid).snapshots().listen((snap) {
+      if (generation != _authEventGeneration) return;
+      final newRole = snap.data()?['role'] as String? ?? 'visitor';
+      final newBoothId = snap.data()?['boothId'] as String?;
+      _roleReadyForUid = uid;
+      if (newRole != _cachedRole || newBoothId != _cachedBoothId) {
+        _cachedRole = newRole;
+        _cachedBoothId = newBoothId;
+        notifyListeners();
+      }
+    });
   }
 
   /// VisitorLoginScreen's entry point — like [login], but rejects an
@@ -470,7 +525,25 @@ class AuthService extends ChangeNotifier {
       isLoading = true;
       notifyListeners();
       await _auth.signInWithEmailAndPassword(email: email, password: password);
-      final role = await getUserRole();
+      final uid = _auth.currentUser!.uid;
+      final doc = await _db.collection('users').doc(uid).get();
+      final status = doc.data()?['accountStatus'] as String? ?? 'active';
+      final role = doc.data()?['role'] as String? ?? 'visitor';
+      if (status == 'banned') {
+        // A banned account is rejected here regardless of role — a banned
+        // plain visitor (role == 'visitor') must not be able to log back
+        // in through this screen either, same as a banned exhibitor/Super
+        // Admin trying the Exhibitor Login screen (see [login]).
+        await _auth.signOut();
+        _cachedRole = 'visitor';
+        _cachedBoothId = null;
+        _roleReadyForUid = null;
+        _suppressAuthBroadcast = false;
+        notifyListeners();
+        await ensureVisitorSession();
+        return 'This account has been suspended. Contact the event '
+            'organizers if you think this is a mistake.';
+      }
       if (role == 'exhibitor' || role == 'super_admin') {
         // Reject: sign back out before this role is ever assigned to
         // `_cachedRole` — the rest of the app (including the reactive root
@@ -491,31 +564,13 @@ class AuthService extends ChangeNotifier {
         return 'This is an exhibitor account. Please use the Exhibitor '
             'login instead.';
       }
-      // Confirmed a plain visitor — safe to broadcast now. Sets up the
-      // live role subscription ourselves (mirroring what the constructor's
-      // listener would normally do) since that listener was suppressed for
-      // the sign-in event this login triggered.
-      final uid = _auth.currentUser?.uid;
+      // Confirmed a plain, non-banned visitor — safe to broadcast now.
       _cachedRole = role;
       _roleReadyForUid = uid;
       final myGeneration = ++_authEventGeneration;
       _suppressAuthBroadcast = false;
       notifyListeners();
-      await _roleSub?.cancel();
-      if (uid != null) {
-        _roleSub =
-            _db.collection('users').doc(uid).snapshots().listen((snap) {
-          if (myGeneration != _authEventGeneration) return;
-          final newRole = snap.data()?['role'] as String? ?? 'visitor';
-          final newBoothId = snap.data()?['boothId'] as String?;
-          _roleReadyForUid = uid;
-          if (newRole != _cachedRole || newBoothId != _cachedBoothId) {
-            _cachedRole = newRole;
-            _cachedBoothId = newBoothId;
-            notifyListeners();
-          }
-        });
-      }
+      _watchOwnUserDoc(uid, myGeneration);
       return null;
     } on FirebaseAuthException catch (e) {
       _suppressAuthBroadcast = false;
@@ -667,6 +722,49 @@ class AuthService extends ChangeNotifier {
       return;
     }
     await ensureVisitorSession();
+  }
+
+  // ── Forced logout on ban (visitor accounts, at the app root) ────────────
+  /// Set by [forceLogoutForBan] right before it signs the account out, and
+  /// read once by app.dart's `_BanNoticeGate` — the login/role-choice
+  /// screen the visitor lands on right after this forced sign-out — to show
+  /// a one-time blocking popup explaining why they were signed out. Cleared
+  /// via [clearPendingBanMessage] once that popup has been shown, so it
+  /// never reappears on a later, unrelated visit to that same screen.
+  String? _pendingBanMessage;
+  String? get pendingBanMessage => _pendingBanMessage;
+
+  void clearPendingBanMessage() {
+    if (_pendingBanMessage == null) return;
+    _pendingBanMessage = null;
+    notifyListeners();
+  }
+
+  // Guards [forceLogoutForBan] against overlapping calls: app.dart's
+  // ban-check StreamBuilder schedules a call on every frame it rebuilds
+  // while still showing a banned visitor as signed in, and `logout()`
+  // below is async — several such frames can fire before `currentUser`
+  // actually goes null and the ban check stops being reached at all.
+  bool _banLogoutInFlight = false;
+
+  /// Called by app.dart the moment its root ban-check sees
+  /// `accountStatus == 'banned'` for a currently-signed-in VISITOR sitting
+  /// at the app root (Home) with nothing pushed on top. Unlike the passive
+  /// `_BannedScreen` still shown for a banned exhibitor/Super Admin (who
+  /// must tap "Sign Out" themselves), a banned visitor here is signed out
+  /// immediately and automatically — no button, no further chance to keep
+  /// using the app from this screen — and [message] is stashed for the
+  /// login/role-choice screen this lands them on to show once, via a
+  /// blocking popup dialog, so they know why.
+  Future<void> forceLogoutForBan(String message) async {
+    if (_banLogoutInFlight) return;
+    _banLogoutInFlight = true;
+    _pendingBanMessage = message;
+    try {
+      await logout();
+    } finally {
+      _banLogoutInFlight = false;
+    }
   }
 
   // ── Get user role ────────────────────────────────────────────────────────
