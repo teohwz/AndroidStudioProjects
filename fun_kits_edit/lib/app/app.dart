@@ -67,6 +67,18 @@ class FunKitsApp extends StatelessWidget {
               body: Center(child: CircularProgressIndicator()),
             );
           }
+          // Belt-and-suspenders guard alongside AuthService's own internal
+          // ordering: never route to Home/a dashboard until the role for
+          // THIS specific signed-in uid has been explicitly confirmed —
+          // closes the gap that let the visitor Home screen flash for a
+          // Super Admin on some cold starts (see the app-launch-flash
+          // entries in the project doc), regardless of the exact auth
+          // event interleaving that produced the stale role.
+          if (!auth.isRoleReadyForCurrentUser) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
           // Ban check is live (a stream, not the login-time-cached role) so
           // a Super Admin banning someone takes effect immediately, without
           // requiring the banned user to sign out first. Routed through
@@ -87,6 +99,13 @@ class FunKitsApp extends StatelessWidget {
               if (status == 'banned') {
                 return _BannedScreen(onLogout: () => auth.logout());
               }
+              // TEMPORARY diagnostic logging — see the "app-launch flash"
+              // entries in the project doc. Safe to remove once that's
+              // confirmed fixed.
+              debugPrint('[app.dart] routing decision: '
+                  'uid=${auth.currentUser?.uid} role=${auth.role} '
+                  'isSuperAdmin=${auth.isSuperAdmin} '
+                  'isExhibitor=${auth.isExhibitor} at ${DateTime.now()}');
               if (auth.isSuperAdmin) return const SuperAdminDashboardScreen();
               // The old shared 'admin' role (global Quiz/Lucky Draw/
               // Exhibitor management) is retired — an 'exhibitor' now owns

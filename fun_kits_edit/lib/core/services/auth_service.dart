@@ -94,6 +94,25 @@ class AuthService extends ChangeNotifier {
   bool _authInitialized = false;
   bool get authInitialized => _authInitialized;
 
+  /// The uid whose role has actually been confirmed (via [getUserRole] or
+  /// the live [_roleSub] listener) and is safe to route on. This is a
+  /// belt-and-suspenders guard on top of the constructor's own ordering
+  /// (which already only calls [notifyListeners] once role resolution is
+  /// done): app.dart additionally refuses to route to Home/a dashboard
+  /// unless THIS matches the currently signed-in uid, so no matter what
+  /// interleaving of auth events/async gaps produces a mismatch between
+  /// `currentUser` and `_cachedRole`, the wrong screen can never render —
+  /// it shows a spinner instead until the role for that specific uid is
+  /// confirmed. See [isRoleReadyForCurrentUser].
+  String? _roleReadyForUid;
+
+  /// True once [_roleReadyForUid] matches the currently signed-in user (or
+  /// there's no signed-in user at all, in which case there's nothing to
+  /// wait for). app.dart gates routing on this in addition to
+  /// [authInitialized].
+  bool get isRoleReadyForCurrentUser =>
+      currentUser == null || _roleReadyForUid == currentUser!.uid;
+
   /// Reads the persisted "last login mode" flag from disk. Local-only
   /// (SharedPreferences) — no network or Firebase call — so it's cheap and
   /// safe to await at app start, before any session is established. See
@@ -113,25 +132,86 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  // Bumped on every authStateChanges event and used to discard the result
+  // of a slower, now-superseded event's getUserRole() call if a newer
+  // event's role has already resolved and notified first — see the
+  // constructor below for why this matters.
+  int _authEventGeneration = 0;
+
+  // When true, the constructor's authStateChanges() listener below does
+  // nothing at all — no role fetch, no _cachedRole/_roleReadyForUid
+  // mutation, no notifyListeners(). Set by [loginAsVisitor] while it's
+  // signing in and checking whether the account is actually staff, so
+  // that this listener (which reacts to the SAME underlying Firebase Auth
+  // state change independently and knows nothing about "this attempt
+  // might get rejected") can never race ahead and broadcast a staff role
+  // to the rest of the app — see [loginAsVisitor]'s doc comment for the
+  // full explanation of the bug this closes.
+  bool _suppressAuthBroadcast = false;
+
   AuthService() {
     // Listen to auth state changes so role is always fresh, and keep a live
     // subscription to that user's own doc so a role change made *while*
     // they're signed in (e.g. a Super Admin edit in the Firebase Console)
     // takes effect immediately instead of only on the next login.
-    _auth.authStateChanges().listen((user) async {
+    //
+    // On some cold starts (a persisted staff/Super Admin session being
+    // restored), authStateChanges() has been observed to emit a transient
+    // `null` event before the real, already-signed-in user — while
+    // `_auth.currentUser` (the live getter app.dart reads) has *already*
+    // flipped back to that real user by the time this callback body runs.
+    // If we trusted the event's own `user` payload for that first event,
+    // we'd reset _cachedRole to 'visitor' and notify — and since
+    // app.dart's routing reads auth.currentUser live (not this event's
+    // payload), it would see the real signed-in Super Admin but a
+    // 'visitor' role, and flash the visitor Home screen for the second or
+    // so it takes the *next* (real) event's getUserRole() call to correct
+    // it. Reading `_auth.currentUser` fresh here — instead of the
+    // stream's own payload — sidesteps that blip.
+    _auth.authStateChanges().listen((event) async {
+      if (_suppressAuthBroadcast) {
+        debugPrint('[AuthService] authStateChanges event suppressed '
+            '(loginAsVisitor is mid-check): eventUser=${event?.uid} '
+            'at ${DateTime.now()}');
+        return;
+      }
+      final myGeneration = ++_authEventGeneration;
       _authInitialized = true;
       await _roleSub?.cancel();
       _roleSub = null;
+      final user = _auth.currentUser;
+      // TEMPORARY diagnostic logging — see the "app-launch flash" entry in
+      // the project doc. Safe to remove once that's confirmed fixed;
+      // debugPrint is a no-op in release builds by default in this app's
+      // existing usage elsewhere, so this is harmless to leave in the
+      // meantime.
+      debugPrint('[AuthService] authStateChanges event: '
+          'eventUser=${event?.uid} liveCurrentUser=${user?.uid} '
+          'gen=$myGeneration at ${DateTime.now()}');
       if (user != null) {
-        _cachedRole = await getUserRole();
+        final role = await getUserRole();
+        debugPrint('[AuthService] getUserRole() resolved for ${user.uid}: '
+            '$role gen=$myGeneration at ${DateTime.now()}');
+        // A newer auth event has already resolved and notified while we
+        // were awaiting Firestore — don't let this now-stale result
+        // clobber it.
+        if (myGeneration != _authEventGeneration) {
+          debugPrint('[AuthService] discarding stale gen=$myGeneration '
+              '(current=$_authEventGeneration)');
+          return;
+        }
+        _cachedRole = role;
+        _roleReadyForUid = user.uid;
         notifyListeners();
         _roleSub = _db
             .collection('users')
             .doc(user.uid)
             .snapshots()
             .listen((snap) {
+          if (myGeneration != _authEventGeneration) return;
           final newRole = snap.data()?['role'] as String? ?? 'visitor';
           final newBoothId = snap.data()?['boothId'] as String?;
+          _roleReadyForUid = user.uid;
           if (newRole != _cachedRole || newBoothId != _cachedBoothId) {
             _cachedRole = newRole;
             _cachedBoothId = newBoothId;
@@ -141,6 +221,7 @@ class AuthService extends ChangeNotifier {
       } else {
         _cachedRole = 'visitor';
         _cachedBoothId = null;
+        _roleReadyForUid = null;
         notifyListeners();
       }
     });
@@ -351,29 +432,101 @@ class AuthService extends ChangeNotifier {
   /// decision) — this one exists specifically so a visitor who mistakenly
   /// types their own exhibitor credentials into the wrong screen is told
   /// so, rather than silently dropped into the Exhibitor Dashboard.
+  ///
+  /// Deliberately does NOT call the shared [login] helper. [login] sets
+  /// `_cachedRole` and calls `notifyListeners()` the moment it discovers
+  /// the role — but the constructor's `authStateChanges()` listener reacts
+  /// to the SAME underlying Firebase Auth sign-in independently and
+  /// concurrently (signing in with email/password fires its own auth-state
+  /// event, regardless of which code path initiated the sign-in), and that
+  /// listener has no idea this particular attempt might get rejected a
+  /// moment later. The result, confirmed by inspection: typing a Super
+  /// Admin/exhibitor account's credentials into the Visitor Login screen
+  /// (when it's the app's current bootstrap/root screen) could briefly
+  /// but visibly swap the screen to that account's real dashboard — the
+  /// same reactive-root mechanism as the app-launch-flash bug elsewhere in
+  /// this project, just triggered by an interactive login instead of a
+  /// cold start. This method sets [_suppressAuthBroadcast] for the whole
+  /// sign-in-and-check window so the constructor's listener does nothing
+  /// while it runs, keeps the freshly-looked-up role in a local variable
+  /// (never touching `_cachedRole`) until the account is confirmed to be a
+  /// plain visitor, and only then lifts suppression and broadcasts —
+  /// guaranteeing `_cachedRole` can never become `'exhibitor'`/
+  /// `'super_admin'` at any point a rejected attempt is in flight.
   Future<String?> loginAsVisitor({
     required String email,
     required String password,
   }) async {
-    final error = await login(email: email, password: password);
-    if (error != null) return error;
-    if (isExhibitor || isSuperAdmin) {
-      // Discard this sign-in entirely — don't leave a staff account signed
-      // in just because it was tried on the visitor screen — then restore
-      // a guest session so the visitor isn't left stranded with no account
-      // at all (same "never a login wall" principle as ensureVisitorSession
-      // elsewhere).
-      await _roleSub?.cancel();
-      _roleSub = null;
-      await _auth.signOut();
-      _cachedRole = 'visitor';
-      _cachedBoothId = null;
+    _suppressAuthBroadcast = true;
+    // Cancel any live role subscription for whoever was signed in before
+    // (e.g. an existing anonymous guest session) up front — normally the
+    // constructor's listener does this the instant sign-in succeeds, but
+    // it's suppressed for the whole duration of this method, so a stale
+    // subscription would otherwise keep listening under the OLD uid while
+    // briefly signed in as the staff account being checked below.
+    await _roleSub?.cancel();
+    _roleSub = null;
+    try {
+      isLoading = true;
       notifyListeners();
-      await ensureVisitorSession();
-      return 'This is an exhibitor account. Please use the Exhibitor login '
-          'instead.';
+      await _auth.signInWithEmailAndPassword(email: email, password: password);
+      final role = await getUserRole();
+      if (role == 'exhibitor' || role == 'super_admin') {
+        // Reject: sign back out before this role is ever assigned to
+        // `_cachedRole` — the rest of the app (including the reactive root
+        // in app.dart) never sees this account as signed in with a
+        // resolved staff role at any point.
+        await _auth.signOut();
+        _cachedRole = 'visitor';
+        _cachedBoothId = null;
+        _roleReadyForUid = null;
+        _suppressAuthBroadcast = false;
+        notifyListeners();
+        // Restore a guest session so the visitor isn't left stranded with
+        // no account at all (same "never a login wall" principle as
+        // ensureVisitorSession elsewhere). Suppression is already lifted,
+        // so the constructor's listener picks this new anonymous session
+        // up normally, same as any other guest sign-in.
+        await ensureVisitorSession();
+        return 'This is an exhibitor account. Please use the Exhibitor '
+            'login instead.';
+      }
+      // Confirmed a plain visitor — safe to broadcast now. Sets up the
+      // live role subscription ourselves (mirroring what the constructor's
+      // listener would normally do) since that listener was suppressed for
+      // the sign-in event this login triggered.
+      final uid = _auth.currentUser?.uid;
+      _cachedRole = role;
+      _roleReadyForUid = uid;
+      final myGeneration = ++_authEventGeneration;
+      _suppressAuthBroadcast = false;
+      notifyListeners();
+      await _roleSub?.cancel();
+      if (uid != null) {
+        _roleSub =
+            _db.collection('users').doc(uid).snapshots().listen((snap) {
+          if (myGeneration != _authEventGeneration) return;
+          final newRole = snap.data()?['role'] as String? ?? 'visitor';
+          final newBoothId = snap.data()?['boothId'] as String?;
+          _roleReadyForUid = uid;
+          if (newRole != _cachedRole || newBoothId != _cachedBoothId) {
+            _cachedRole = newRole;
+            _cachedBoothId = newBoothId;
+            notifyListeners();
+          }
+        });
+      }
+      return null;
+    } on FirebaseAuthException catch (e) {
+      _suppressAuthBroadcast = false;
+      return e.message;
+    } catch (e) {
+      _suppressAuthBroadcast = false;
+      return e.toString();
+    } finally {
+      isLoading = false;
+      notifyListeners();
     }
-    return null;
   }
 
   // ── Save points: upgrade the anonymous session in-place ────────────────
