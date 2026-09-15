@@ -334,6 +334,25 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
     final oldRole = (widget.user['role'] as String?) ?? 'visitor';
     if (newRole == oldRole) return;
     final palette = Theme.of(context).extension<AppPalette>()!;
+    // FirestoreService.setUserRole() permanently zeroes `points` and
+    // deletes the `leaderboard` entry the moment an account is promoted to
+    // 'super_admin' — demoting back away from super_admin later does NOT
+    // restore any of it (see that method's doc comment). Surfacing that
+    // here, only when it would actually destroy something, is what stops
+    // a Super Admin from promoting a points-holding visitor by mistake and
+    // only discovering the wipe afterward.
+    final currentPoints = (widget.user['points'] as num?)?.toInt() ?? 0;
+    final wipesPoints = newRole == 'super_admin' && currentPoints > 0;
+    final message = newRole == 'super_admin'
+        ? 'You are about to grant SUPER ADMIN — the highest access level '
+            'in this app, including managing rewards, points, and every '
+            'other user.'
+            '${wipesPoints ? ' This will also permanently wipe their '
+                '$currentPoints points and remove them from the '
+                'leaderboard — that cannot be undone.' : ''}'
+            ' Are you sure?'
+        : 'Change this user\'s role from ${_roleLabel(oldRole)} to '
+            '${_roleLabel(newRole)}?';
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -345,14 +364,7 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
             const Expanded(child: Text('Highly privileged action')),
           ],
         ),
-        content: Text(
-          newRole == 'super_admin'
-              ? 'You are about to grant SUPER ADMIN — the highest access '
-                  'level in this app, including managing rewards, points, '
-                  'and every other user. Are you sure?'
-              : 'Change this user\'s role from ${_roleLabel(oldRole)} to '
-                  '${_roleLabel(newRole)}?',
-        ),
+        content: Text(message),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),

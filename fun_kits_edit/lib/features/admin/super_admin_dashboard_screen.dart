@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/models/exhibitor_model.dart';
 import '../../core/models/reward_model.dart';
 import '../../core/models/redemption_model.dart';
 import '../../core/services/auth_service.dart';
@@ -235,88 +236,145 @@ class _OverviewBody extends StatelessWidget {
                   builder: (context, redemptionsSnap) {
                     final redemptions = redemptionsSnap.data ?? [];
 
-                    final activeRewards =
-                        rewards.where((r) => r.isActive).length;
-                    final lowStock = rewards
-                        .where((r) =>
-                            r.isActive &&
-                            r.stockLevel(threshold) == StockLevel.low)
-                        .length;
-                    final outOfStock = rewards
-                        .where((r) =>
-                            r.isActive &&
-                            r.stockLevel(threshold) == StockLevel.outOfStock)
-                        .length;
-                    final pendingDeliveries = redemptions
-                        .where((r) =>
-                            r.status == RedemptionStatus.pendingDelivery)
-                        .length;
-                    final totalPointsRedeemed = redemptions
-                        .where((r) => r.status != RedemptionStatus.refunded)
-                        .fold<int>(0, (sum, r) => sum + r.pointsSpent);
+                    // Booths aren't fetched by any of the StreamBuilders
+                    // above — added as one more nested level (same pattern
+                    // as everything else on this screen) purely for the
+                    // Total Booths / Unclaimed Slots tiles below.
+                    return StreamBuilder<List<ExhibitorModel>>(
+                      stream: fs.getBoothsAdmin(),
+                      builder: (context, boothsSnap) {
+                        final booths = boothsSnap.data ?? [];
 
-                    return RefreshIndicator(
-                      onRefresh: () async {},
-                      child: ListView(
-                        padding: const EdgeInsets.all(20),
-                        children: [
-                          Row(
+                        final activeRewards =
+                            rewards.where((r) => r.isActive).length;
+                        final lowStock = rewards
+                            .where((r) =>
+                                r.isActive &&
+                                r.stockLevel(threshold) == StockLevel.low)
+                            .length;
+                        final outOfStock = rewards
+                            .where((r) =>
+                                r.isActive &&
+                                r.stockLevel(threshold) ==
+                                    StockLevel.outOfStock)
+                            .length;
+                        final pendingDeliveries = redemptions
+                            .where((r) =>
+                                r.status == RedemptionStatus.pendingDelivery)
+                            .length;
+                        final totalPointsRedeemed = redemptions
+                            .where(
+                                (r) => r.status != RedemptionStatus.refunded)
+                            .fold<int>(0, (sum, r) => sum + r.pointsSpent);
+                        final unclaimedSlots =
+                            booths.where((b) => !b.isClaimed).length;
+                        final bannedUsers = users
+                            .where((u) => u['accountStatus'] == 'banned')
+                            .length;
+
+                        return RefreshIndicator(
+                          onRefresh: () async {},
+                          child: ListView(
+                            padding: const EdgeInsets.all(20),
                             children: [
-                              _StatTile(
-                                  label: 'Total Users',
-                                  value: '${users.length}',
-                                  icon: Icons.groups_rounded,
-                                  color: theme.colorScheme.primary),
-                              const SizedBox(width: 8),
-                              _StatTile(
-                                  label: 'Total Rewards',
-                                  value: '${rewards.length}',
-                                  icon: Icons.card_giftcard_rounded,
-                                  color: palette.exhibitorColor),
-                              const SizedBox(width: 8),
-                              _StatTile(
-                                  label: 'Active Rewards',
-                                  value: '$activeRewards',
-                                  icon: Icons.check_circle_rounded,
-                                  color: palette.success),
-                              const SizedBox(width: 8),
-                              _StatTile(
-                                  label: 'Total Redemptions',
-                                  value: '${redemptions.length}',
-                                  icon: Icons.receipt_long_rounded,
-                                  color: palette.quizColor),
+                              Row(
+                                children: [
+                                  _StatTile(
+                                      label: 'Total Users',
+                                      value: '${users.length}',
+                                      icon: Icons.groups_rounded,
+                                      color: theme.colorScheme.primary,
+                                      onTap: () => Navigator.pushNamed(
+                                          context, AppRoutes.manageUsers)),
+                                  const SizedBox(width: 8),
+                                  _StatTile(
+                                      label: 'Total Rewards',
+                                      value: '${rewards.length}',
+                                      icon: Icons.card_giftcard_rounded,
+                                      color: palette.exhibitorColor),
+                                  const SizedBox(width: 8),
+                                  _StatTile(
+                                      label: 'Active Rewards',
+                                      value: '$activeRewards',
+                                      icon: Icons.check_circle_rounded,
+                                      color: palette.success),
+                                  const SizedBox(width: 8),
+                                  _StatTile(
+                                      label: 'Total Redemptions',
+                                      value: '${redemptions.length}',
+                                      icon: Icons.receipt_long_rounded,
+                                      color: palette.quizColor),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  _StatTile(
+                                      label: 'Pending Deliveries',
+                                      value: '$pendingDeliveries',
+                                      icon: Icons.local_shipping_rounded,
+                                      color: palette.warning),
+                                  const SizedBox(width: 8),
+                                  _StatTile(
+                                      label: 'Points Redeemed',
+                                      value: '$totalPointsRedeemed',
+                                      icon: Icons.paid_rounded,
+                                      color: palette.gold),
+                                  const SizedBox(width: 8),
+                                  _StatTile(
+                                      label: 'Low Stock',
+                                      value: '$lowStock',
+                                      icon: Icons.warning_amber_rounded,
+                                      color: palette.warning),
+                                  const SizedBox(width: 8),
+                                  _StatTile(
+                                      label: 'Out of Stock',
+                                      value: '$outOfStock',
+                                      icon: Icons.remove_shopping_cart_rounded,
+                                      color: palette.danger),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              // 3rd row — deliberately just 3 tiles (not a
+                              // full 4-wide row): Booth visibility and the
+                              // Banned Users count didn't exist anywhere on
+                              // this Overview before. All 3 tap through to
+                              // the existing Manage Users/Booths screens
+                              // unfiltered — no new filtering UI added.
+                              Row(
+                                children: [
+                                  _StatTile(
+                                      label: 'Total Booths',
+                                      value: '${booths.length}',
+                                      icon: Icons.storefront_rounded,
+                                      color: palette.exhibitorColor,
+                                      onTap: () => Navigator.pushNamed(
+                                          context, AppRoutes.manageBooths)),
+                                  const SizedBox(width: 8),
+                                  _StatTile(
+                                      label: 'Unclaimed Slots',
+                                      value: '$unclaimedSlots',
+                                      icon: Icons.storefront_outlined,
+                                      color: palette.textMedium,
+                                      onTap: () => Navigator.pushNamed(
+                                          context, AppRoutes.manageBooths)),
+                                  const SizedBox(width: 8),
+                                  _StatTile(
+                                      label: 'Banned Users',
+                                      value: '$bannedUsers',
+                                      icon: Icons.block_rounded,
+                                      color: palette.danger,
+                                      onTap: () => Navigator.pushNamed(
+                                          context, AppRoutes.manageUsers)),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              _RecentActivityCard(
+                                  users: users, redemptions: redemptions),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              _StatTile(
-                                  label: 'Pending Deliveries',
-                                  value: '$pendingDeliveries',
-                                  icon: Icons.local_shipping_rounded,
-                                  color: palette.warning),
-                              const SizedBox(width: 8),
-                              _StatTile(
-                                  label: 'Points Redeemed',
-                                  value: '$totalPointsRedeemed',
-                                  icon: Icons.paid_rounded,
-                                  color: palette.gold),
-                              const SizedBox(width: 8),
-                              _StatTile(
-                                  label: 'Low Stock',
-                                  value: '$lowStock',
-                                  icon: Icons.warning_amber_rounded,
-                                  color: palette.warning),
-                              const SizedBox(width: 8),
-                              _StatTile(
-                                  label: 'Out of Stock',
-                                  value: '$outOfStock',
-                                  icon: Icons.remove_shopping_cart_rounded,
-                                  color: palette.danger),
-                            ],
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     );
                   },
                 );
@@ -390,37 +448,221 @@ class _StatTile extends StatelessWidget {
     required this.value,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   final String label;
   final String value;
   final IconData icon;
   final Color color;
+  // Optional — when set, the tile jumps to the relevant screen (Manage
+  // Users/Booths, unfiltered — see the "Tap-through" decision for this
+  // round). Left null for tiles with nowhere sensible to jump to (e.g.
+  // "Active Rewards" — Manage Rewards has no active-only filter either).
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
+    final content = Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(height: 3),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w800, color: color)),
+          const SizedBox(height: 1),
+          Text(label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: TextStyle(fontSize: 9, color: palette.textMedium)),
+        ],
+      ),
+    );
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(height: 3),
-            Text(value,
-                style: TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w800, color: color)),
-            const SizedBox(height: 1),
-            Text(label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                style: TextStyle(fontSize: 9, color: palette.textMedium)),
-          ],
-        ),
+      child: onTap == null
+          ? content
+          : Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: onTap,
+                child: content,
+              ),
+            ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  OVERVIEW ACTIVITY FEED — merged from new registrations, redemptions,
+//  and refunds. Unlike the Exhibitor Dashboard's equivalent feed, names
+//  and emails here are shown in full rather than masked: this screen is
+//  Super Admin's own privileged view, and Manage Users already shows every
+//  account's real name/email directly (see manage_users_screen.dart) — so
+//  there's no additional exposure from repeating that here. Built straight
+//  from the `users`/`redemptions` lists _OverviewBody already streams in
+//  (no extra Firestore query needed) rather than a FirestoreService method,
+//  since both source lists are already fully loaded in memory by the time
+//  this widget builds.
+// ═══════════════════════════════════════════════════════════════════════
+
+enum _AdminActivityType { registration, redemption, refund }
+
+class _AdminActivityEvent {
+  const _AdminActivityEvent(
+      {required this.type, required this.text, required this.time});
+  final _AdminActivityType type;
+  final String text;
+  final DateTime time;
+}
+
+List<_AdminActivityEvent> _buildAdminActivity(
+  List<Map<String, dynamic>> users,
+  List<RedemptionModel> redemptions,
+) {
+  final events = <_AdminActivityEvent>[];
+
+  for (final u in users) {
+    final createdAt = (u['createdAt'] as dynamic)?.toDate() as DateTime?;
+    if (createdAt == null) continue;
+    final who = ((u['displayName'] as String?)?.trim().isNotEmpty == true)
+        ? u['displayName'] as String
+        : ((u['email'] as String?)?.trim().isNotEmpty == true
+            ? u['email'] as String
+            : 'Someone');
+    final isExhibitor = u['role'] == 'exhibitor';
+    events.add(_AdminActivityEvent(
+      type: _AdminActivityType.registration,
+      text: isExhibitor ? 'New exhibitor: $who' : 'New visitor: $who',
+      time: createdAt,
+    ));
+  }
+
+  for (final r in redemptions) {
+    if (r.createdAt != null) {
+      events.add(_AdminActivityEvent(
+        type: _AdminActivityType.redemption,
+        text: '${r.accountEmail ?? 'A visitor'} redeemed '
+            '${r.rewardName} (${r.pointsSpent} pts)',
+        time: r.createdAt!,
+      ));
+    }
+    if (r.refunded && r.updatedAt != null) {
+      events.add(_AdminActivityEvent(
+        type: _AdminActivityType.refund,
+        text: 'Refunded ${r.pointsSpent} pts to '
+            '${r.accountEmail ?? 'a visitor'} for ${r.rewardName}',
+        time: r.updatedAt!,
+      ));
+    }
+  }
+
+  events.sort((a, b) => b.time.compareTo(a.time));
+  return events.take(8).toList();
+}
+
+class _RecentActivityCard extends StatelessWidget {
+  const _RecentActivityCard(
+      {required this.users, required this.redemptions});
+  final List<Map<String, dynamic>> users;
+  final List<RedemptionModel> redemptions;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
+    final events = _buildAdminActivity(users, redemptions);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border:
+            Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Recent Activity',
+              style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: palette.textDark)),
+          const SizedBox(height: 10),
+          if (events.isEmpty)
+            Text('Nothing yet — new registrations, redemptions, and '
+                'refunds will show up here.',
+                style: TextStyle(fontSize: 12, color: palette.textMedium))
+          else
+            for (final event in events) _AdminActivityRow(event: event),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminActivityRow extends StatelessWidget {
+  const _AdminActivityRow({required this.event});
+  final _AdminActivityEvent event;
+
+  IconData _icon() {
+    switch (event.type) {
+      case _AdminActivityType.registration:
+        return Icons.person_add_alt_1_rounded;
+      case _AdminActivityType.redemption:
+        return Icons.receipt_long_rounded;
+      case _AdminActivityType.refund:
+        return Icons.replay_rounded;
+    }
+  }
+
+  Color _color(AppPalette palette, ColorScheme scheme) {
+    switch (event.type) {
+      case _AdminActivityType.registration:
+        return scheme.primary;
+      case _AdminActivityType.redemption:
+        return palette.quizColor;
+      case _AdminActivityType.refund:
+        return palette.warning;
+    }
+  }
+
+  String _relativeTime(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
+    final color = _color(palette, theme.colorScheme);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(_icon(), size: 15, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(event.text,
+                style: TextStyle(fontSize: 12, color: palette.textDark)),
+          ),
+          const SizedBox(width: 6),
+          Text(_relativeTime(event.time),
+              style: TextStyle(fontSize: 10.5, color: palette.textMedium)),
+        ],
       ),
     );
   }
