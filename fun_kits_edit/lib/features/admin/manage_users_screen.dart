@@ -12,7 +12,19 @@ import '../../core/theme/app_palette.dart';
 // since that would leave them with no assigned booth and break every
 // exhibitor-only screen. Viewing an *existing* exhibitor's profile is
 // handled separately by _UserDetailDialogState's read-only Role display.
-const List<String> _kRoles = ['visitor', 'admin', 'super_admin'];
+//
+// Also excludes the legacy 'admin' role — it predates the current
+// per-booth Exhibitor system, its own dashboard is retired/unreferenced,
+// and nothing in the app grants it any capability today (app.dart's
+// routing only ever checks isSuperAdmin/isExhibitor, falling back to the
+// ordinary visitor Home screen for anything else, 'admin' included) — so
+// it's no longer offered as something to assign. `_roleLabel` still knows
+// how to display it, and `_UserDetailDialogState`'s dropdown always
+// includes whatever role a user is CURRENTLY on (see its `items` below),
+// so an already-existing 'admin' account still shows correctly here
+// rather than crashing — it just can't be picked again once changed away
+// from it.
+const List<String> _kRoles = ['visitor', 'super_admin'];
 
 String _roleLabel(String role) {
   switch (role) {
@@ -499,7 +511,13 @@ class _UserDetailDialogState extends State<_UserDetailDialog> {
                 isExpanded: true,
                 decoration: const InputDecoration(
                     isDense: true, border: OutlineInputBorder()),
-                items: _kRoles
+                // {..._kRoles, _role} rather than just _kRoles: guarantees
+                // whatever role this account is CURRENTLY on is always in
+                // the item list (a DropdownButtonFormField crashes if
+                // `value` isn't among `items`) — matters for a
+                // still-existing legacy 'admin' account now that 'admin'
+                // is no longer one of the assignable options below.
+                items: {..._kRoles, _role}
                     .map((r) =>
                         DropdownMenuItem(value: r, child: Text(_roleLabel(r))))
                     .toList(),
