@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_palette.dart';
 import '../../core/services/auth_service.dart';
-import '../../app/routes.dart';
 import '../../shared/widgets/fun_button.dart';
 import 'role_choice_screen.dart';
 import 'visitor_register_screen.dart';
@@ -54,11 +53,16 @@ class _VisitorLoginScreenState extends State<VisitorLoginScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error)));
     } else if (mounted) {
-      // Clears the whole stack either way — this screen can be the sole
-      // bootstrap route (post-logout) or pushed on top of Register/Login,
-      // and either way a fresh sign-in should land on a clean destination.
-      Navigator.of(context)
-          .pushNamedAndRemoveUntil(AppRoutes.home, (route) => false);
+      // Hand control back to the reactive root ("/") instead of pushing a
+      // named Home route ourselves — it already knows (from AuthService's
+      // now-updated state) to show Home for a plain visitor. Critically,
+      // staying on "/" (rather than removing it, as pushNamedAndRemoveUntil
+      // used to) keeps every bit of live app-root logic — the ban check,
+      // the forced-logout popup, the app-launch-flash guard — active for
+      // the rest of this session instead of tearing it out the instant a
+      // sign-in succeeds. Works the same whether this screen was the sole
+      // bootstrap route or pushed on top of Register/Login.
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 
@@ -83,12 +87,14 @@ class _VisitorLoginScreenState extends State<VisitorLoginScreen> {
     await auth.ensureVisitorSession();
     if (!mounted) return;
     if (auth.authFailed) return; // app.dart shows the retry screen instead
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      Navigator.of(context)
-          .pushNamedAndRemoveUntil(AppRoutes.home, (route) => false);
-    }
+    // Same reactive-root principle as _login() above: once
+    // ensureVisitorSession() has set a signed-in (anonymous) currentUser,
+    // the "/" root already knows to show Home — popping back to it (rather
+    // than pushing/removing a named Home route, which used to tear "/" out
+    // of the stack) is all that's needed, and works whether this screen was
+    // the sole bootstrap route (a no-op pop, since it's already first) or
+    // pushed on top of Register.
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   @override

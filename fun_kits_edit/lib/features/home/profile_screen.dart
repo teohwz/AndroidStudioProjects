@@ -8,7 +8,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/theme/app_palette.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/firestore_service.dart';
-import '../../app/routes.dart';
 import '../auth/role_choice_screen.dart';
 import '../auth/visitor_register_screen.dart';
 import '../../shared/widgets/hero_header.dart';
@@ -260,11 +259,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _logout(AuthService auth) async {
     // A registered (email-linked) visitor logging out lands back on the
     // Visitor Login page — see AuthService.logout(), which records this so
-    // future launches do too.
+    // future launches do too. Popping back to the reactive root ("/")
+    // rather than pushing/removing a named destination route ourselves is
+    // what actually gets them there: "/" reads lastKnownMode itself, and
+    // staying on "/" (instead of tearing it out of the stack) keeps every
+    // bit of live app-root logic — the ban check, the forced-logout popup,
+    // the app-launch-flash guard — active for the rest of this session.
     await auth.logout();
     if (mounted) {
-      Navigator.of(context).pushNamedAndRemoveUntil(
-          AppRoutes.visitorLogin, (route) => false);
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/auth_service.dart';
-import '../../app/routes.dart';
 import '../../shared/widgets/fun_button.dart';
 
 /// The ONLY way an exhibitor account is ever created — replaces the old
@@ -48,14 +47,16 @@ class _ExhibitorRegisterScreenState extends State<ExhibitorRegisterScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error)));
     } else if (mounted) {
-      // A freshly-redeemed invite always makes this an exhibitor account —
-      // send them to their own Dashboard, not the visitor Home screen (a
-      // real bug: the account itself was always correctly created with
-      // role: 'exhibitor', but this screen used to land everyone on Home
-      // regardless, which made a brand-new exhibitor look/feel like they'd
-      // registered as a visitor).
-      Navigator.pushNamedAndRemoveUntil(
-          context, AppRoutes.exhibitorDashboard, (route) => false);
+      // A freshly-redeemed invite always makes this an exhibitor account,
+      // and the reactive root ("/") already knows to send an exhibitor to
+      // their own Dashboard rather than the visitor Home screen (the bug
+      // this used to guard against by pushing a specific destination route
+      // — the account itself was always correctly created with role:
+      // 'exhibitor', the routing just needed to catch up). Popping back to
+      // "/" instead of pushing/removing a named destination keeps every bit
+      // of live app-root logic (the ban check, the forced-logout popup, the
+      // app-launch-flash guard) active for the rest of this session.
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 

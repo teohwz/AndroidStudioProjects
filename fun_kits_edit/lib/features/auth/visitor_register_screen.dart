@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/services/auth_service.dart';
-import '../../app/routes.dart';
 import '../../shared/widgets/fun_button.dart';
 import 'visitor_login_screen.dart';
 
@@ -71,8 +70,13 @@ class _VisitorRegisterScreenState extends State<VisitorRegisterScreen> {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
-      Navigator.of(context)
-          .pushNamedAndRemoveUntil(AppRoutes.home, (route) => false);
+      // Hand control back to the reactive root ("/") instead of pushing a
+      // named Home route ourselves — it already knows (from AuthService's
+      // now-updated state) to show Home. Staying on "/" — rather than
+      // removing it, as pushNamedAndRemoveUntil used to — keeps every bit
+      // of live app-root logic (the ban check, the forced-logout popup,
+      // the app-launch-flash guard) active for the rest of this session.
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 
@@ -84,10 +88,14 @@ class _VisitorRegisterScreenState extends State<VisitorRegisterScreen> {
   /// true here — a `pop()` would just reveal whichever of those screens
   /// sent the visitor here, leaving them one more screen away from
   /// actually being in the app instead of landing them in it. Always
-  /// clearing the stack down to Home is what "continue as guest" means.
+  /// clearing the stack back down to the reactive root ("/") — rather than
+  /// pushing/removing a named Home route, which used to tear "/" out of
+  /// the stack — is what "continue as guest" means; "/" already knows to
+  /// show Home once the (by-now signed-in) visitor's role is confirmed,
+  /// and staying there keeps the ban check and every other bit of live
+  /// app-root logic active for the rest of this session.
   void _skip() {
-    Navigator.of(context)
-        .pushNamedAndRemoveUntil(AppRoutes.home, (route) => false);
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   /// Handles both the AppBar's back arrow and the system back

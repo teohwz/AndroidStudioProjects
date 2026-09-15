@@ -46,13 +46,16 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error)));
     } else if (mounted) {
-      final auth = context.read<AuthService>();
-      final destination = auth.isSuperAdmin
-          ? AppRoutes.superAdminDashboard
-          : auth.isExhibitor
-              ? AppRoutes.exhibitorDashboard
-              : AppRoutes.home;
-      Navigator.pushReplacementNamed(context, destination);
+      // Hand control back to the reactive root ("/") instead of navigating
+      // to a specific destination ourselves — it already knows (from
+      // AuthService's now-updated state) whether to show the Super Admin
+      // Dashboard, the Exhibitor Dashboard, or Home. Critically, staying on
+      // "/" (rather than replacing/removing it with a named destination
+      // route, as this used to do) keeps every bit of live app-root logic —
+      // the ban check, the forced-logout popup, the app-launch-flash guard —
+      // active for the rest of this session instead of tearing it out the
+      // instant a login succeeds.
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/routes.dart';
 import '../../core/models/exhibitor_model.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/firestore_service.dart';
@@ -231,9 +230,18 @@ class _OverviewHeader extends StatelessWidget {
                 icon: Icon(Icons.more_vert_rounded, color: palette.textMedium),
                 onSelected: (v) async {
                   if (v == 'logout') {
+                    // Pop back to the reactive root ("/") instead of
+                    // pushing/removing a named destination ourselves — it
+                    // already reads AuthService.lastKnownMode (set by
+                    // logout() to 'exhibitor') and shows the right login
+                    // screen, and staying on "/" keeps every bit of live
+                    // app-root logic (the ban check, the forced-logout
+                    // popup, the app-launch-flash guard) active for the
+                    // rest of this session.
                     await context.read<AuthService>().logout();
                     if (context.mounted) {
-                      Navigator.pushReplacementNamed(context, AppRoutes.login);
+                      Navigator.of(context)
+                          .popUntil((route) => route.isFirst);
                     }
                   } else if (v == 'switch_role') {
                     // An exhibitor switching roles can only be switching TO

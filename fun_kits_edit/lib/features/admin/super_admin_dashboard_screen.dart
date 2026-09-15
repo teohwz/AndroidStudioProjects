@@ -179,9 +179,16 @@ class _OverviewHeader extends StatelessWidget {
                 // Super Admin logout is "sticky" — AuthService.logout()
                 // persists this so a relaunch also lands back on Login, not
                 // a silent guest session (see AuthService's lastKnownMode).
+                // Popping back to the reactive root ("/") — rather than
+                // pushing/removing a named destination ourselves — is what
+                // actually gets them there: "/" reads lastKnownMode itself,
+                // and staying on "/" keeps every bit of live app-root logic
+                // (the ban check, the forced-logout popup, the
+                // app-launch-flash guard) active for the rest of this
+                // session.
                 await context.read<AuthService>().logout();
                 if (context.mounted) {
-                  Navigator.pushReplacementNamed(context, AppRoutes.login);
+                  Navigator.of(context).popUntil((route) => route.isFirst);
                 }
               }
             },
