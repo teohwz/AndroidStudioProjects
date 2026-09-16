@@ -47,6 +47,40 @@ class BoothPreviewScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Mirrors booth_screen.dart: once there's a real
+                          // banner photo, the name/booth-number relocates
+                          // off the image into plain page content here, but
+                          // per the exhibitor's explicit choice still uses
+                          // the customizable Name Text color (headerTextColor)
+                          // rather than switching to a fixed dark color.
+                          if (ex.hasBanner)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    ex.name.isEmpty ? 'Your Booth Name' : ex.name,
+                                    style: TextStyle(
+                                        color: ex.headerTextColor,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w800),
+                                  ),
+                                  if (ex.boothNumber.isNotEmpty ||
+                                      ex.category.isNotEmpty)
+                                    Text(
+                                        [
+                                          if (ex.boothNumber.isNotEmpty)
+                                            'Booth ${ex.boothNumber}',
+                                          ex.category,
+                                        ].join(' · '),
+                                        style: TextStyle(
+                                            color: ex.headerTextColor
+                                                .withOpacity(0.7),
+                                            fontSize: 13)),
+                                ],
+                              ),
+                            ),
                           if (ex.welcomeMessage.isNotEmpty)
                             Container(
                               width: double.infinity,
@@ -221,8 +255,6 @@ class _Hero extends StatelessWidget {
             ? DecorationImage(
                 image: CachedNetworkImageProvider(ex.bannerImageUrl),
                 fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(
-                    Colors.black.withOpacity(0.35), BlendMode.darken),
               )
             : null,
         gradient: ex.hasBanner
@@ -248,33 +280,38 @@ class _Hero extends StatelessWidget {
                 ? CachedNetworkImage(imageUrl: ex.logoUrl, fit: BoxFit.cover)
                 : Icon(Icons.store_rounded, color: color, size: 30),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  ex.name.isEmpty ? 'Your Booth Name' : ex.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      color: ex.headerTextColor,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800),
-                ),
-                if (ex.boothNumber.isNotEmpty || ex.category.isNotEmpty)
+          // Once there's a real banner photo, the name/booth-number moves
+          // down into plain page content instead (see the block just below
+          // this hero) — only the logo stays overlapping the banner.
+          if (!ex.hasBanner) ...[
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    [
-                      if (ex.boothNumber.isNotEmpty) 'Booth ${ex.boothNumber}',
-                      ex.category,
-                    ].join(' · '),
+                    ex.name.isEmpty ? 'Your Booth Name' : ex.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: ex.headerTextColor.withOpacity(0.7),
-                        fontSize: 12),
+                        color: ex.headerTextColor,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800),
                   ),
-              ],
+                  if (ex.boothNumber.isNotEmpty || ex.category.isNotEmpty)
+                    Text(
+                      [
+                        if (ex.boothNumber.isNotEmpty) 'Booth ${ex.boothNumber}',
+                        ex.category,
+                      ].join(' · '),
+                      style: TextStyle(
+                          color: ex.headerTextColor.withOpacity(0.7),
+                          fontSize: 12),
+                    ),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

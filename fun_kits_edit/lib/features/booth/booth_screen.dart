@@ -137,6 +137,16 @@ class _BoothScreenState extends State<BoothScreen> {
             backgroundColor: color,
             foregroundColor: Colors.white,
             flexibleSpace: FlexibleSpaceBar(
+              // When there's a real banner photo, the name/booth-number text
+              // moves off the image entirely (see the block rendered just
+              // below the CustomScrollView's app bar) — busy photos make an
+              // overlaid text color a losing bet no matter what the
+              // exhibitor picks. The banner then renders as a clean,
+              // undarkened image with just the logo overlapping its bottom
+              // edge. With no banner (plain gradient), the previous overlay
+              // layout — logo + name + booth-number together, in the
+              // customizable Name Text color — is unchanged, since a solid
+              // gradient has predictable, controllable contrast.
               background: Container(
                 decoration: BoxDecoration(
                   borderRadius: const BorderRadius.only(
@@ -147,9 +157,6 @@ class _BoothScreenState extends State<BoothScreen> {
                       ? DecorationImage(
                           image: CachedNetworkImageProvider(ex.bannerImageUrl),
                           fit: BoxFit.cover,
-                          colorFilter: ColorFilter.mode(
-                              Colors.black.withOpacity(0.35),
-                              BlendMode.darken),
                         )
                       : null,
                   gradient: ex.hasBanner
@@ -181,30 +188,32 @@ class _BoothScreenState extends State<BoothScreen> {
                               : Icon(Icons.store_rounded,
                                   color: color, size: 30),
                         ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(ex.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                      color: ex.headerTextColor,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w800)),
-                              if (ex.boothNumber.isNotEmpty || ex.category.isNotEmpty)
-                                Text(
-                                    [
-                                      if (ex.boothNumber.isNotEmpty) 'Booth ${ex.boothNumber}',
-                                      ex.category,
-                                    ].join(' · '),
+                        if (!ex.hasBanner) ...[
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(ex.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                        color: ex.headerTextColor.withOpacity(0.7),
-                                        fontSize: 12)),
-                            ],
+                                        color: ex.headerTextColor,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800)),
+                                if (ex.boothNumber.isNotEmpty || ex.category.isNotEmpty)
+                                  Text(
+                                      [
+                                        if (ex.boothNumber.isNotEmpty) 'Booth ${ex.boothNumber}',
+                                        ex.category,
+                                      ].join(' · '),
+                                      style: TextStyle(
+                                          color: ex.headerTextColor.withOpacity(0.7),
+                                          fontSize: 12)),
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                     if (uid != null)
@@ -237,6 +246,37 @@ class _BoothScreenState extends State<BoothScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Relocated off the banner (see the SliverAppBar above)
+                  // whenever there's a real banner photo. Still uses the
+                  // customizable Name Text color (headerTextColor), per the
+                  // exhibitor's explicit choice to keep it applying here too
+                  // — so a light color picked for on-banner contrast may
+                  // read poorly against this light page background; that's
+                  // now the exhibitor's own call to get right, not something
+                  // this screen guards against.
+                  if (ex.hasBanner)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(ex.name,
+                              style: TextStyle(
+                                  color: ex.headerTextColor,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800)),
+                          if (ex.boothNumber.isNotEmpty || ex.category.isNotEmpty)
+                            Text(
+                                [
+                                  if (ex.boothNumber.isNotEmpty) 'Booth ${ex.boothNumber}',
+                                  ex.category,
+                                ].join(' · '),
+                                style: TextStyle(
+                                    color: ex.headerTextColor.withOpacity(0.7),
+                                    fontSize: 13)),
+                        ],
+                      ),
+                    ),
                   if (_checkingIn)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),

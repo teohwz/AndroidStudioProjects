@@ -133,6 +133,36 @@ class _ExhibitorBoothEditorScreenState
     if (mounted) setState(() => _uploadingBanner = false);
   }
 
+  /// Clears the logo/banner locally only — like every other field on this
+  /// screen, nothing actually changes until "Save Booth" is tapped, so
+  /// backing out is as simple as not saving. The file itself is left in
+  /// Storage untouched (already how re-uploading a replacement image works
+  /// today — the old file isn't cleaned up either).
+  Future<void> _confirmRemoveImage({
+    required String label,
+    required VoidCallback onConfirmed,
+  }) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Remove $label?'),
+        content: Text(
+            'This clears the $label from your booth. It only takes effect '
+            'once you tap "Save Booth".'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+              child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (ok == true) onConfirmed();
+  }
+
   Future<void> _save() async {
     // Guards against a race that could silently save a stale logo/banner
     // URL: if the exhibitor taps Save Booth while an image is still
@@ -265,24 +295,49 @@ class _ExhibitorBoothEditorScreenState
               children: [
                 _sectionTitle('Images'),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: _ImageTile(
-                        label: 'Logo',
-                        url: _logoUrl,
-                        uploading: _uploadingLogo,
-                        onTap: _uploadLogo,
-                        palette: palette,
+                      child: Column(
+                        children: [
+                          _ImageTile(
+                            label: 'Logo',
+                            url: _logoUrl,
+                            uploading: _uploadingLogo,
+                            onTap: _uploadLogo,
+                            palette: palette,
+                          ),
+                          if (_logoUrl.isNotEmpty)
+                            _RemoveImageButton(
+                              enabled: !_uploadingLogo,
+                              onPressed: () => _confirmRemoveImage(
+                                  label: 'logo',
+                                  onConfirmed: () =>
+                                      setState(() => _logoUrl = '')),
+                            ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _ImageTile(
-                        label: 'Banner',
-                        url: _bannerUrl,
-                        uploading: _uploadingBanner,
-                        onTap: _uploadBanner,
-                        palette: palette,
+                      child: Column(
+                        children: [
+                          _ImageTile(
+                            label: 'Banner',
+                            url: _bannerUrl,
+                            uploading: _uploadingBanner,
+                            onTap: _uploadBanner,
+                            palette: palette,
+                          ),
+                          if (_bannerUrl.isNotEmpty)
+                            _RemoveImageButton(
+                              enabled: !_uploadingBanner,
+                              onPressed: () => _confirmRemoveImage(
+                                  label: 'banner',
+                                  onConfirmed: () =>
+                                      setState(() => _bannerUrl = '')),
+                            ),
+                        ],
                       ),
                     ),
                   ],
@@ -471,6 +526,35 @@ class _ImageTile extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700)),
                   ),
+      ),
+    );
+  }
+}
+
+/// Sits directly under a Logo/Banner _ImageTile once it has an image —
+/// clears that field (pending "Save Booth", like every other edit on this
+/// screen) rather than deleting anything from Storage immediately.
+class _RemoveImageButton extends StatelessWidget {
+  const _RemoveImageButton({required this.enabled, required this.onPressed});
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: SizedBox(
+        width: double.infinity,
+        child: TextButton.icon(
+          onPressed: enabled ? onPressed : null,
+          icon: const Icon(Icons.delete_outline_rounded, size: 16),
+          label: const Text('Remove', style: TextStyle(fontSize: 12)),
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.redAccent,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            minimumSize: const Size(0, 32),
+          ),
+        ),
       ),
     );
   }
