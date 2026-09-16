@@ -40,9 +40,13 @@ class _ManageSpinWheelScreenState extends State<ManageSpinWheelScreen> {
   }
 
   Future<void> _save() async {
-    if (_segments.isEmpty) {
+    // The wheel widget itself can't draw a single-slice wheel — it needs at
+    // least 2 prizes to render at all, so this is enforced here at save
+    // time rather than letting a 1-prize wheel reach visitors and crash.
+    if (_segments.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Add at least one prize before saving.')));
+          content:
+              Text('Add at least 2 prizes so the wheel has something to spin between.')));
       return;
     }
     setState(() => _saving = true);
@@ -91,6 +95,7 @@ class _ManageSpinWheelScreenState extends State<ManageSpinWheelScreen> {
                 PrizeSegmentList(
                   segments: _segments,
                   accentColor: palette.spinWheelColor,
+                  minCount: 2,
                   onChanged: (s) => setState(() => _segments = s),
                 ),
               ],

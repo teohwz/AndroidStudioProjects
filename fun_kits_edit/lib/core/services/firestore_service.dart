@@ -1903,16 +1903,18 @@ class FirestoreService {
     await _db.collection('prize_wins').doc(winId).update({'collected': collected});
   }
 
-  /// A booth's most recent physical-prize wins, across Lucky Draw, Spin
-  /// Wheel and Scratch Card alike (all three write to `prize_wins` — see
-  /// [recordLuckyDrawPrizeWin] and [playPrizeGame]'s physical branch) —
-  /// powers each game screen's "Recent Winners" panel. Returns the real
+  /// A booth's most recent wins for one specific game (Lucky Draw, Spin
+  /// Wheel, or Scratch Card — all three write to `prize_wins`, see
+  /// [recordLuckyDrawPrizeWin] and [playPrizeGame]'s physical branch, but
+  /// each game's own "Recent Winners" panel should only ever show that
+  /// game's own winners, not every game at the booth). Returns the real
   /// display name; masking it (see maskWinnerName) is the UI's job.
   Stream<List<PrizeWinModel>> getRecentPrizeWins(String boothId,
-      {int limit = 5}) {
+      {required String gameType, int limit = 5}) {
     return _db
         .collection('prize_wins')
         .where('boothId', isEqualTo: boothId)
+        .where('gameType', isEqualTo: gameType)
         .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()

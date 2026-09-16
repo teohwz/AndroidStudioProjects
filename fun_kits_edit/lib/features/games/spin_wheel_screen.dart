@@ -256,7 +256,9 @@ class _SpinWheelScreenState extends State<SpinWheelScreen> {
                             ),
                           ),
                           RecentWinnersList(
-                              boothId: widget.exhibitorId, color: color),
+                              boothId: widget.exhibitorId,
+                              gameType: 'spin_wheel',
+                              color: color),
                         ],
                       ),
                     ),
