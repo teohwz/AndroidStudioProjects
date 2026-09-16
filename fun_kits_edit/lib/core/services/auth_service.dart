@@ -189,6 +189,14 @@ class AuthService extends ChangeNotifier {
           'eventUser=${event?.uid} liveCurrentUser=${user?.uid} '
           'gen=$myGeneration at ${DateTime.now()}');
       if (user != null) {
+        // Confirmed requirement: anonymous players are invisible on the
+        // leaderboard. Entries created before this flag existed (or from
+        // a session that went stale for some other reason) get corrected
+        // here, once, every time the app resolves a signed-in user —
+        // independent of the role/generation logic below (never awaited,
+        // never touches _cachedRole or notifyListeners) so it can't
+        // affect or be affected by that race-sensitive flow.
+        unawaited(_syncLeaderboardAnonymityFlag(user.uid, user.isAnonymous));
         final role = await getUserRole();
         debugPrint('[AuthService] getUserRole() resolved for ${user.uid}: '
             '$role gen=$myGeneration at ${DateTime.now()}');
@@ -211,6 +219,30 @@ class AuthService extends ChangeNotifier {
         notifyListeners();
       }
     });
+  }
+
+  /// Keeps an EXISTING `leaderboard/{uid}` doc's `isAnonymous` flag in
+  /// sync with this device's actual Auth status, every time the app
+  /// resolves a signed-in user (see the authStateChanges listener above).
+  /// Deliberately uses `.update()` (not `.set(..., merge: true)`) and
+  /// swallows any failure silently: a visitor who has never earned a
+  /// point has no `leaderboard` doc yet, and this must NOT create one for
+  /// them — that would put a brand-new 0-point entry on the leaderboard
+  /// where none existed before. `addPoints()` is what creates that doc
+  /// (already stamped with the correct flag from the start); this is
+  /// purely a self-heal for a doc that already exists but predates this
+  /// flag, or whose flag has otherwise gone stale.
+  Future<void> _syncLeaderboardAnonymityFlag(String uid, bool isAnonymous) async {
+    try {
+      await _db
+          .collection('leaderboard')
+          .doc(uid)
+          .update({'isAnonymous': isAnonymous});
+    } catch (_) {
+      // No existing doc to fix (NOT_FOUND) — nothing to do. Any other
+      // transient failure is likewise fine to ignore here; the next app
+      // start or next play will simply try again.
+    }
   }
 
   // ── Visitor session (no login/register required) ──────────────────────────
@@ -619,12 +651,21 @@ class AuthService extends ChangeNotifier {
         },
         SetOptions(merge: true),
       );
-      if (name != null && name.isNotEmpty) {
-        await _db.collection('leaderboard').doc(user.uid).set(
-          {'displayName': name},
-          SetOptions(merge: true),
-        );
-      }
+      // Confirmed requirement: registering is what makes a visitor visible
+      // on the leaderboard (they were invisible as a guest — see
+      // FirestoreService.addPoints/getLeaderboard). Flip `isAnonymous` to
+      // false here unconditionally — even if they skip setting a display
+      // name — so this is the one moment that's guaranteed to unhide them
+      // immediately, rather than waiting for their next play to re-tag
+      // the doc. merge: true — safe even for someone who registers before
+      // ever earning a point, when this doc doesn't exist yet.
+      await _db.collection('leaderboard').doc(user.uid).set(
+        {
+          'isAnonymous': false,
+          if (name != null && name.isNotEmpty) 'displayName': name,
+        },
+        SetOptions(merge: true),
+      );
       notifyListeners();
       return null;
     } on FirebaseAuthException catch (e) {

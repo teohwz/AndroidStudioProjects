@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart' show IconData, Icons, debugPrint;
 import '../constants/game_types.dart';
 import '../models/exhibitor_model.dart';
@@ -446,8 +447,18 @@ class FirestoreService {
         .limit(50)
         .snapshots()
         .map((snap) {
+      // Confirmed requirement: anonymous (guest) players are invisible on
+      // the leaderboard until they register — filtered out client-side
+      // (a `where` clause here can't be combined with the `orderBy`
+      // above on a different field) BEFORE ranks are numbered, so ranks
+      // close up with no gaps. A doc with no `isAnonymous` field yet
+      // (written before this flag existed) stays visible until it's
+      // next touched — see addPoints()/AuthService for where it's kept
+      // up to date.
+      final visible =
+          snap.docs.where((doc) => doc.data()['isAnonymous'] != true);
       int rank = 1;
-      return snap.docs.map((doc) {
+      return visible.map((doc) {
         final entry = LeaderboardEntry.fromMap(doc.id, doc.data());
         return entry.withRank(rank++);
       }).toList();
@@ -479,6 +490,17 @@ class FirestoreService {
     if (requesterRole == 'exhibitor' || requesterRole == 'super_admin') return;
 
     final ref = _db.collection('leaderboard').doc(uid);
+    // Confirmed requirement: anonymous (guest) players stay invisible on
+    // every leaderboard until they register. Every write to a leaderboard
+    // doc — new or existing — stamps the CURRENT device's live
+    // Auth.isAnonymous status, so a guest who keeps playing after this
+    // shipped is (re-)tagged correctly on every single play, and this is
+    // one of three places that keep the flag honest (see also
+    // AuthService.linkEmail, which flips it to false the instant someone
+    // registers, and the app-start self-heal for entries created before
+    // this flag existed). Defaults to `true` (hidden) if there's
+    // somehow no signed-in user — the safe direction for this feature.
+    final isAnonymous = FirebaseAuth.instance.currentUser?.isAnonymous ?? true;
     final isNewGame = await _db.runTransaction<bool>((tx) async {
       final snap = await tx.get(ref);
       if (snap.exists) {
@@ -500,6 +522,7 @@ class FirestoreService {
           if (isNewGame) 'gamesPlayed': FieldValue.increment(1),
           'gameBreakdown': breakdown,
           'lastPlayedAt': FieldValue.serverTimestamp(),
+          'isAnonymous': isAnonymous,
         });
         return isNewGame;
       } else {
@@ -510,6 +533,7 @@ class FirestoreService {
           'gameBreakdown':
               gameType.isNotEmpty ? {gameType: points} : {},
           'lastPlayedAt': FieldValue.serverTimestamp(),
+          'isAnonymous': isAnonymous,
         });
         return gameType.isNotEmpty;
       }
@@ -1051,8 +1075,12 @@ class FirestoreService {
         .limit(50)
         .snapshots()
         .map((snap) {
+      // Same anonymous-player filtering as getLeaderboard() above — see
+      // its comment for why this is client-side rather than a `where`.
+      final visible =
+          snap.docs.where((doc) => doc.data()['isAnonymous'] != true);
       int rank = 1;
-      return snap.docs.map((doc) {
+      return visible.map((doc) {
         final entry = LeaderboardEntry.fromMap(doc.id, doc.data());
         return entry.withRank(rank++);
       }).toList();
@@ -1102,6 +1130,14 @@ class FirestoreService {
       // has no `leaderboard` doc — falls back to 'Player' below, same as
       // before.
       final names = <String, String>{};
+      // Confirmed requirement: anonymous (guest) players are invisible on
+      // every leaderboard, including this per-booth one — same
+      // `isAnonymous` flag the global/per-game leaderboards check,
+      // fetched here from the same `leaderboard` batch already used for
+      // display names. A uid with no `leaderboard` doc at all (or one
+      // written before this flag existed) stays visible — see
+      // getLeaderboard()'s comment for why that's the safe default here.
+      final anonymousUids = <String>{};
       for (var i = 0; i < uids.length; i += 30) {
         final chunk = uids.sublist(i, (i + 30).clamp(0, uids.length));
         final leaderboardSnap = await _db
@@ -1110,10 +1146,12 @@ class FirestoreService {
             .get();
         for (final d in leaderboardSnap.docs) {
           names[d.id] = (d.data()['displayName'] as String?) ?? 'Player';
+          if (d.data()['isAnonymous'] == true) anonymousUids.add(d.id);
         }
       }
 
       final rows = totals.entries
+          .where((e) => !anonymousUids.contains(e.key))
           .map((e) => ExhibitorLeaderboardEntry(
                 uid: e.key,
                 displayName: names[e.key] ?? 'Player',
