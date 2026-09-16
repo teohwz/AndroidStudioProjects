@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../app/routes.dart';
 import '../../core/theme/app_palette.dart';
 import '../../core/models/lucky_draw_model.dart';
 import '../../core/services/firestore_service.dart';
@@ -127,6 +128,7 @@ class _LuckyDrawScreenState extends State<LuckyDrawScreen> {
     final theme = Theme.of(context);
     final palette = theme.extension<AppPalette>()!;
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final isAnonymous = FirebaseAuth.instance.currentUser?.isAnonymous ?? true;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -135,62 +137,148 @@ class _LuckyDrawScreenState extends State<LuckyDrawScreen> {
         backgroundColor: palette.luckyDrawColor,
         foregroundColor: Colors.white,
       ),
-      body: StreamBuilder<List<LuckyDrawModel>>(
-        stream: _draws,
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final draws = snap.data ?? [];
-
-          if (uid.isNotEmpty) _maybeClaimWinnings(draws, uid);
-
-          // Once a draw ends (isActive=false), clear joinedDrawId so user can
-          // join another. Checked via `d.isActive` now, not "is this draw
-          // still in the list" — closed draws stay in `draws` (see
-          // FirestoreService.getLuckyDraws' note) so the winner banner and
-          // the claim step above can still see them.
-          final activeIds =
-              draws.where((d) => d.isActive).map((d) => d.id).toSet();
-          if (_joinedDrawId != null && !activeIds.contains(_joinedDrawId)) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) setState(() => _joinedDrawId = null);
-            });
-          }
-
-          if (draws.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.casino_rounded,
-                      size: 56, color: theme.colorScheme.onSurfaceVariant),
-                  const SizedBox(height: 12),
-                  Text('No active draws right now.',
-                      style: TextStyle(color: palette.textMedium)),
-                ],
+      body: Column(
+        children: [
+          // Confirmed requirement: a persistent, upfront nudge for guests —
+          // same visual pattern as the Points Shop's "Save My Points"
+          // banner — rather than only surfacing the registration
+          // requirement via _joinDraw's dialog once they tap "Join Draw",
+          // or leaving them looking at a bare "Draw closed" card with
+          // nothing actionable once a draw ends. Purely additive: every
+          // draw card's own join/closed/winner behavior is unchanged.
+          if (isAnonymous)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: _RegisterToJoinBanner(
+                onRegister: () =>
+                    Navigator.pushNamed(context, AppRoutes.saveProgress),
               ),
-            );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: draws.length,
-            itemBuilder: (_, i) {
-              final draw = draws[i];
-              final hasJoined = draw.participants.contains(uid);
-              final isMyDraw = _joinedDrawId == draw.id;
-              final canJoin = _joinedDrawId == null || isMyDraw;
+            ),
+          Expanded(
+            child: StreamBuilder<List<LuckyDrawModel>>(
+              stream: _draws,
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final draws = snap.data ?? [];
 
-              return _DrawCard(
-                draw: draw,
-                hasJoined: hasJoined,
-                canJoin: canJoin,
-                onJoin: () => _joinDraw(draw),
-                winnerName: _winnerNames[draw.id],
-              );
-            },
-          );
-        },
+                if (uid.isNotEmpty) _maybeClaimWinnings(draws, uid);
+
+                // Once a draw ends (isActive=false), clear joinedDrawId so user can
+                // join another. Checked via `d.isActive` now, not "is this draw
+                // still in the list" — closed draws stay in `draws` (see
+                // FirestoreService.getLuckyDraws' note) so the winner banner and
+                // the claim step above can still see them.
+                final activeIds =
+                    draws.where((d) => d.isActive).map((d) => d.id).toSet();
+                if (_joinedDrawId != null &&
+                    !activeIds.contains(_joinedDrawId)) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) setState(() => _joinedDrawId = null);
+                  });
+                }
+
+                if (draws.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.casino_rounded,
+                            size: 56,
+                            color: theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(height: 12),
+                        Text('No active draws right now.',
+                            style: TextStyle(color: palette.textMedium)),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: draws.length,
+                  itemBuilder: (_, i) {
+                    final draw = draws[i];
+                    final hasJoined = draw.participants.contains(uid);
+                    final isMyDraw = _joinedDrawId == draw.id;
+                    final canJoin = _joinedDrawId == null || isMyDraw;
+
+                    return _DrawCard(
+                      draw: draw,
+                      hasJoined: hasJoined,
+                      canJoin: canJoin,
+                      onJoin: () => _joinDraw(draw),
+                      winnerName: _winnerNames[draw.id],
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Register-to-join banner (guest nudge) ──────────────────────────────────
+// Same visual pattern as ShopScreen's _SavePointsBanner — kept as its own
+// private widget here (rather than shared) since the two screens' copy is
+// deliberately different (points-safety vs. winner-notification), matching
+// how _JoinToRankBanner on the Leaderboard is also its own local widget.
+class _RegisterToJoinBanner extends StatelessWidget {
+  const _RegisterToJoinBanner({required this.onRegister});
+  final VoidCallback onRegister;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: palette.warning.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: palette.warning.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 22, color: palette.warning),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "You're viewing as a guest.",
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "Register with email to join a draw — that's how we'll "
+                  "notify you (and know where to send you) if you win.",
+                  style: TextStyle(color: palette.textMedium, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 32,
+                  child: ElevatedButton(
+                    onPressed: onRegister,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: palette.warning,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Register',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
