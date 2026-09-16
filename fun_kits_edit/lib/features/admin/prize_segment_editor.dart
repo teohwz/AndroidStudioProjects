@@ -17,11 +17,17 @@ class PrizeSegmentList extends StatelessWidget {
     required this.segments,
     required this.onChanged,
     required this.accentColor,
+    this.minCount = 1,
   });
 
   final List<PrizeSegment> segments;
   final ValueChanged<List<PrizeSegment>> onChanged;
   final Color accentColor;
+
+  /// Minimum prizes required before this game can be saved/played — Spin
+  /// Wheel needs 2 (the wheel widget can't draw a single-slice wheel), while
+  /// Scratch Card only needs 1. Drives the empty/too-few hint below.
+  final int minCount;
 
   Future<void> _addOrEdit(BuildContext context, [PrizeSegment? existing]) async {
     final result = await showModalBottomSheet<PrizeSegment>(
@@ -64,14 +70,17 @@ class PrizeSegmentList extends StatelessWidget {
             ),
           ],
         ),
-        if (segments.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 20),
+        if (segments.length < minCount)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
             child: Text(
-              'No prizes yet — add at least one so visitors can win '
-              'something when they play.',
+              segments.isEmpty
+                  ? 'No prizes yet — add at least ${minCount == 1 ? 'one' : 'two'} '
+                      'so visitors can win something when they play.'
+                  : 'Add at least one more prize — this game needs at least '
+                      'two to work.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textMedium),
+              style: const TextStyle(color: AppColors.textMedium),
             ),
           ),
         for (final s in segments)

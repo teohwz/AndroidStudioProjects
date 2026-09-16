@@ -166,12 +166,22 @@ class ScratchCardConfig {
 }
 
 /// Exhibitor-configured Guess the Number content for one booth.
+///
+/// [currentSecret] is the ONE shared answer every visitor at this booth is
+/// currently trying to guess (null only if it hasn't been generated yet,
+/// which saveGuessNumberConfig always fixes on save). It's whatever the
+/// exhibitor last set it to, or the last auto-rolled value after a visitor
+/// solved it — see FirestoreService.rerollGuessNumberSecret. A visitor's own
+/// in-progress round snapshots this value once at Start, so it never shifts
+/// under them mid-round even if someone else solves it or the exhibitor
+/// edits it in the meantime.
 class GuessNumberConfig {
   final String boothId;
   final int minValue;
   final int maxValue;
   final int rewardPoints;
   final String hint; // optional, exhibitor-written, revealable any time
+  final int? currentSecret;
   final DateTime? updatedAt;
 
   const GuessNumberConfig({
@@ -180,6 +190,7 @@ class GuessNumberConfig {
     this.maxValue = 100,
     this.rewardPoints = 50,
     this.hint = '',
+    this.currentSecret,
     this.updatedAt,
   });
 
@@ -195,6 +206,7 @@ class GuessNumberConfig {
         maxValue: map['maxValue'] ?? 100,
         rewardPoints: map['rewardPoints'] ?? 50,
         hint: map['hint'] ?? '',
+        currentSecret: map['currentSecret'] as int?,
         updatedAt: map['updatedAt'] != null
             ? (map['updatedAt'] as dynamic).toDate()
             : null,
@@ -207,8 +219,66 @@ class GuessNumberConfig {
         'maxValue': maxValue,
         'rewardPoints': rewardPoints,
         'hint': hint,
+        'currentSecret': currentSecret,
         'updatedAt': updatedAt,
       };
+
+  GuessNumberConfig copyWith({int? currentSecret}) => GuessNumberConfig(
+        boothId: boothId,
+        minValue: minValue,
+        maxValue: maxValue,
+        rewardPoints: rewardPoints,
+        hint: hint,
+        currentSecret: currentSecret ?? this.currentSecret,
+        updatedAt: updatedAt,
+      );
+}
+
+/// Exhibitor-configured Code Breaker content for one booth — just the one
+/// shared secret code every visitor is currently trying to crack (4 unique
+/// digits 0-9), same "one shared answer, auto-rerolled on solve, exhibitor
+/// can view or override any time" model as [GuessNumberConfig]. Unlike Guess
+/// the Number, Code Breaker has no other exhibitor-set options (no range, no
+/// hint) — this doc exists purely to hold the shared secret, and is seeded
+/// automatically with a random code the first time the exhibitor opens
+/// Game Settings or the Code Breaker customize screen (see
+/// FirestoreService.ensureCodeBreakerSeeded), so booths that already had
+/// Code Breaker turned on keep working with no action needed.
+class CodeBreakerConfig {
+  final String boothId;
+  final List<int> currentSecret; // 4 unique digits 0-9
+  final DateTime? updatedAt;
+
+  const CodeBreakerConfig({
+    required this.boothId,
+    this.currentSecret = const [],
+    this.updatedAt,
+  });
+
+  bool get hasContent => currentSecret.length == 4;
+
+  factory CodeBreakerConfig.fromMap(
+          String boothId, Map<String, dynamic> map) =>
+      CodeBreakerConfig(
+        boothId: boothId,
+        currentSecret: List<int>.from(map['currentSecret'] ?? const []),
+        updatedAt: map['updatedAt'] != null
+            ? (map['updatedAt'] as dynamic).toDate()
+            : null,
+      );
+
+  Map<String, dynamic> toMap() => {
+        'gameType': 'code_breaker',
+        'boothId': boothId,
+        'currentSecret': currentSecret,
+        'updatedAt': updatedAt,
+      };
+
+  CodeBreakerConfig copyWith({List<int>? currentSecret}) => CodeBreakerConfig(
+        boothId: boothId,
+        currentSecret: currentSecret ?? this.currentSecret,
+        updatedAt: updatedAt,
+      );
 }
 
 /// Exhibitor-uploaded pair images for the (reworked) Memory Matrix

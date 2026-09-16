@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/models/game_content_model.dart';
+import '../../core/services/firestore_service.dart';
 import '../../core/theme/app_palette.dart';
 import 'game_common.dart';
 
@@ -17,6 +19,15 @@ class _Guess {
 /// CODE BREAKER — a 4-digit "Bulls & Cows" style combination-lock puzzle.
 /// Crack the secret (4 unique digits) before the timer runs out; fewer
 /// guesses and less time used both mean more points.
+///
+/// Every visitor at a booth cracks the SAME shared code
+/// ([CodeBreakerConfig.currentSecret], see FirestoreService), fetched once
+/// when this screen loads so a round in progress never shifts underneath a
+/// visitor. Cracking it rolls a fresh shared code for whoever plays next.
+/// If the exhibitor hasn't opened Game Settings or the Code Breaker
+/// customize screen since this feature shipped, no shared doc exists yet —
+/// this screen falls back to a private random code for that round only, so
+/// the game still works with zero exhibitor setup, same as before.
 class CodeBreakerScreen extends StatefulWidget {
   const CodeBreakerScreen({
     super.key,
@@ -37,6 +48,9 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
   static const int _totalSeconds = 90;
 
   final _rand = Random();
+  final _fs = FirestoreService();
+  CodeBreakerConfig? _sharedConfig; // null = no shared doc yet; play a private local code
+  bool _loading = true;
   List<int> _secret = [];
   List<int> _current = [];
   final List<_Guess> _guesses = [];
@@ -47,15 +61,36 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
   DateTime? _startedAt;
 
   @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final boothId = widget.exhibitorId;
+    final config = boothId == null ? null : await _fs.getCodeBreakerConfig(boothId);
+    if (!mounted) return;
+    setState(() {
+      _sharedConfig = config;
+      _loading = false;
+    });
+  }
+
+  @override
   void dispose() {
     _timer?.cancel();
     super.dispose();
   }
 
+  List<int> _rollLocalSecret() =>
+      (List.generate(10, (i) => i)..shuffle(_rand)).take(4).toList();
+
   void _start() {
-    final digits = List.generate(10, (i) => i)..shuffle(_rand);
+    final shared = _sharedConfig;
+    final secret =
+        (shared != null && shared.hasContent) ? shared.currentSecret : _rollLocalSecret();
     setState(() {
-      _secret = digits.take(4).toList();
+      _secret = secret;
       _current = [];
       _guesses.clear();
       _secondsLeft = _totalSeconds;
@@ -105,6 +140,21 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
     int score;
     if (solved) {
       score = max(50, 500 - (_guesses.length - 1) * 40 - elapsed * 3);
+      // Roll a fresh shared code for whoever plays next at this booth —
+      // only if this round was actually playing the shared one (not a
+      // private local fallback, which has no shared doc to update).
+      final boothId = widget.exhibitorId;
+      final shared = _sharedConfig;
+      if (boothId != null && shared != null && shared.hasContent) {
+        try {
+          final newSecret = await _fs.rerollCodeBreakerSecret(boothId);
+          if (mounted) {
+            setState(() => _sharedConfig = shared.copyWith(currentSecret: newSecret));
+          }
+        } catch (e) {
+          debugPrint('rerollCodeBreakerSecret failed: $e');
+        }
+      }
     } else {
       final bestBulls =
           _guesses.isEmpty ? 0 : _guesses.map((g) => g.bulls).reduce(max);
@@ -144,7 +194,9 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: gameAppBar(widget.title, color),
-      body: !_started && !_gameOver
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : !_started && !_gameOver
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),

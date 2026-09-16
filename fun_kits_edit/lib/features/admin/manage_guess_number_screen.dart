@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/models/game_content_model.dart';
@@ -27,8 +29,17 @@ class _ManageGuessNumberScreenState extends State<ManageGuessNumberScreen> {
   late final TextEditingController _maxCtrl;
   late final TextEditingController _pointsCtrl;
   late final TextEditingController _hintCtrl;
+  late final TextEditingController _customSecretCtrl;
   bool _loading = true;
   bool _saving = false;
+  bool _secretRevealed = false;
+  bool _settingCustom = false;
+  String? _customSecretError;
+  // Kept in sync live (not just from the one-shot _load()) so a quick
+  // Randomize/Set-custom action is never clobbered by a later main Save
+  // that would otherwise submit a stale currentSecret.
+  int? _currentSecret;
+  StreamSubscription<GuessNumberConfig?>? _secretSub;
 
   @override
   void initState() {
@@ -37,7 +48,11 @@ class _ManageGuessNumberScreenState extends State<ManageGuessNumberScreen> {
     _maxCtrl = TextEditingController(text: '100');
     _pointsCtrl = TextEditingController(text: '50');
     _hintCtrl = TextEditingController();
+    _customSecretCtrl = TextEditingController();
     _load();
+    _secretSub = _fs.watchGuessNumberConfig(widget.boothId).listen((c) {
+      if (mounted) setState(() => _currentSecret = c?.currentSecret);
+    });
   }
 
   @override
@@ -46,6 +61,8 @@ class _ManageGuessNumberScreenState extends State<ManageGuessNumberScreen> {
     _maxCtrl.dispose();
     _pointsCtrl.dispose();
     _hintCtrl.dispose();
+    _customSecretCtrl.dispose();
+    _secretSub?.cancel();
     super.dispose();
   }
 
@@ -78,6 +95,10 @@ class _ManageGuessNumberScreenState extends State<ManageGuessNumberScreen> {
         maxValue: max,
         rewardPoints: int.tryParse(_pointsCtrl.text.trim())?.clamp(1, 100000) ?? 50,
         hint: _hintCtrl.text.trim(),
+        // Preserve whatever the current shared answer already is (kept live
+        // via _secretSub) — saveGuessNumberConfig only rolls a new one if
+        // this is null or no longer fits the (possibly just-edited) range.
+        currentSecret: _currentSecret,
       ),
     );
     if (!mounted) return;
@@ -92,6 +113,41 @@ class _ManageGuessNumberScreenState extends State<ManageGuessNumberScreen> {
         ],
       ),
     ));
+  }
+
+  Future<void> _randomizeNow() async {
+    final min = int.tryParse(_minCtrl.text.trim());
+    final max = int.tryParse(_maxCtrl.text.trim());
+    if (min == null || max == null || max <= min) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Save a valid min/max range first.')));
+      return;
+    }
+    await _fs.rerollGuessNumberSecret(widget.boothId, min, max);
+  }
+
+  Future<void> _setCustomSecret() async {
+    final min = int.tryParse(_minCtrl.text.trim());
+    final max = int.tryParse(_maxCtrl.text.trim());
+    final value = int.tryParse(_customSecretCtrl.text.trim());
+    if (min == null || max == null || max <= min) {
+      setState(() => _customSecretError = 'Save a valid min/max range first.');
+      return;
+    }
+    if (value == null || value < min || value > max) {
+      setState(() => _customSecretError = 'Enter a number between $min and $max.');
+      return;
+    }
+    setState(() {
+      _settingCustom = true;
+      _customSecretError = null;
+    });
+    await _fs.setGuessNumberSecret(widget.boothId, value);
+    if (!mounted) return;
+    setState(() => _settingCustom = false);
+    _customSecretCtrl.clear();
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Answer updated!')));
   }
 
   @override
@@ -120,6 +176,101 @@ class _ManageGuessNumberScreenState extends State<ManageGuessNumberScreen> {
                     style: TextStyle(color: palette.textMedium, fontSize: 12),
                   ),
                   const SizedBox(height: 16),
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: palette.guessNumberColor.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                          color: palette.guessNumberColor.withOpacity(0.25)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.key_rounded,
+                                size: 16, color: palette.guessNumberColor),
+                            const SizedBox(width: 6),
+                            const Text('Current Answer',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w800, fontSize: 13)),
+                            const Spacer(),
+                            Text(
+                              _currentSecret == null
+                                  ? '—'
+                                  : (_secretRevealed ? '$_currentSecret' : '••'),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                  color: palette.guessNumberColor),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                  _secretRevealed
+                                      ? Icons.visibility_off_rounded
+                                      : Icons.visibility_rounded,
+                                  size: 18),
+                              tooltip: _secretRevealed ? 'Hide' : 'Reveal',
+                              onPressed: () => setState(
+                                  () => _secretRevealed = !_secretRevealed),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          'The one shared answer every visitor here is '
+                          'currently guessing. It automatically changes to a '
+                          'new random number whenever someone solves it — or '
+                          'set your own below any time.',
+                          style: TextStyle(
+                              fontSize: 11, color: palette.textMedium),
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed:
+                                _currentSecret == null ? null : _randomizeNow,
+                            icon: const Icon(Icons.casino_rounded, size: 16),
+                            label: const Text('Randomize Now'),
+                          ),
+                        ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _customSecretCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  labelText: 'Set a specific answer',
+                                  errorText: _customSecretError,
+                                  border: const OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              height: 48,
+                              child: _settingCustom
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2)))
+                                  : TextButton(
+                                      onPressed: _setCustomSecret,
+                                      child: const Text('Set')),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                   Row(
                     children: [
                       Expanded(

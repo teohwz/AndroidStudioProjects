@@ -1767,10 +1767,104 @@ class FirestoreService {
         snap.exists ? GuessNumberConfig.fromMap(boothId, snap.data()!) : null);
   }
 
+  /// Exhibitor's full-config save (range/points/hint, plus optionally their
+  /// own chosen answer). If [config.currentSecret] is missing or no longer
+  /// fits the (possibly just-changed) range, a fresh one is rolled here so
+  /// there's always a valid shared answer for visitors to play against.
   Future<void> saveGuessNumberConfig(GuessNumberConfig config) async {
+    var secret = config.currentSecret;
+    if (secret == null || secret < config.minValue || secret > config.maxValue) {
+      secret = config.minValue +
+          Random().nextInt(config.maxValue - config.minValue + 1);
+    }
     final map = config.toMap();
+    map['currentSecret'] = secret;
     map['updatedAt'] = FieldValue.serverTimestamp();
     await _gameContentRef(config.boothId, 'guess_number').set(map);
+  }
+
+  /// Called by the winning visitor's own client immediately after a correct
+  /// guess, rolling a fresh shared answer for the next visitor. Bounded by a
+  /// narrow Firestore rule to touching ONLY `currentSecret` on an existing
+  /// guess_number doc they don't own — same accepted trade-off class as
+  /// playPrizeGame's stock decrement (a modified client could reroll
+  /// without truly solving; see the top-of-file honest-limitation note in
+  /// firestore.rules).
+  Future<int> rerollGuessNumberSecret(
+      String boothId, int minValue, int maxValue) async {
+    final secret = minValue + Random().nextInt(maxValue - minValue + 1);
+    await _gameContentRef(boothId, 'guess_number')
+        .update({'currentSecret': secret});
+    return secret;
+  }
+
+  /// Exhibitor's manual override — sets a specific current answer, bypassing
+  /// the random roll. Same owner-only path as the rest of this doc's
+  /// authoring.
+  Future<void> setGuessNumberSecret(String boothId, int secret) async {
+    await _gameContentRef(boothId, 'guess_number')
+        .update({'currentSecret': secret});
+  }
+
+  // ── Code Breaker ───────────────────────────────────────────────────────
+  List<int> _rollCodeBreakerSecret() =>
+      (List.generate(10, (i) => i)..shuffle(Random())).take(4).toList();
+
+  Future<CodeBreakerConfig?> getCodeBreakerConfig(String boothId) async {
+    final snap = await _gameContentRef(boothId, 'code_breaker').get();
+    if (!snap.exists) return null;
+    return CodeBreakerConfig.fromMap(boothId, snap.data()!);
+  }
+
+  Stream<CodeBreakerConfig?> watchCodeBreakerConfig(String boothId) {
+    return _gameContentRef(boothId, 'code_breaker').snapshots().map((snap) =>
+        snap.exists ? CodeBreakerConfig.fromMap(boothId, snap.data()!) : null);
+  }
+
+  /// Exhibitor's manual override — sets a specific 4-unique-digit code.
+  Future<void> saveCodeBreakerConfig(CodeBreakerConfig config) async {
+    final map = config.toMap();
+    map['updatedAt'] = FieldValue.serverTimestamp();
+    await _gameContentRef(config.boothId, 'code_breaker').set(map);
+  }
+
+  /// Seeds a random shared code the first time this booth's Code Breaker is
+  /// looked at by its own exhibitor (Game Settings or the Customize screen)
+  /// — a no-op if a doc already exists. Code Breaker (unlike Guess the
+  /// Number) has no other exhibitor setup step, so without this, booths
+  /// that already had it toggled on would never get a shared code at all.
+  /// Visitors at such a booth still play fine in the meantime — see
+  /// CodeBreakerScreen's per-visitor-random fallback when no doc exists yet.
+  Future<void> ensureCodeBreakerSeeded(String boothId) async {
+    final ref = _gameContentRef(boothId, 'code_breaker');
+    final snap = await ref.get();
+    if (snap.exists) return;
+    final map = CodeBreakerConfig(
+      boothId: boothId,
+      currentSecret: _rollCodeBreakerSecret(),
+    ).toMap();
+    map['updatedAt'] = FieldValue.serverTimestamp();
+    await ref.set(map);
+  }
+
+  /// Called by the winning visitor's own client immediately after cracking
+  /// the code, rolling a fresh shared code for the next visitor. See
+  /// [rerollGuessNumberSecret]'s doc comment for the security-rule
+  /// trade-off this relies on.
+  Future<List<int>> rerollCodeBreakerSecret(String boothId) async {
+    final secret = _rollCodeBreakerSecret();
+    await _gameContentRef(boothId, 'code_breaker')
+        .update({'currentSecret': secret});
+    return secret;
+  }
+
+  /// Exhibitor's manual override — sets a specific 4-unique-digit code,
+  /// bypassing the random roll. Same owner-only path as the rest of this
+  /// doc's authoring. [secret] must already be validated by the caller (4
+  /// unique digits 0-9).
+  Future<void> setCodeBreakerSecret(String boothId, List<int> secret) async {
+    await _gameContentRef(boothId, 'code_breaker')
+        .update({'currentSecret': secret});
   }
 
   // ── Memory Cards pair images ───────────────────────────────────────────

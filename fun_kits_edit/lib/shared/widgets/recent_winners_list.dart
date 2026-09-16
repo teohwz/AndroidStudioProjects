@@ -5,27 +5,31 @@ import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/utils/mask_name.dart';
 
-/// A small "Recent Winners" panel for a booth's Spin Wheel or Scratch Card
-/// screen — pulls from the shared `prize_wins` collection (every physical
-/// prize win, across Lucky Draw/Spin Wheel/Scratch Card, is logged there —
-/// see FirestoreService.playPrizeGame/recordLuckyDrawPrizeWin), masking
-/// each winner's name (see maskWinnerName). Renders nothing while there are
-/// no wins yet at this booth, so it never shows an empty/awkward box.
+/// A small "Recent Winners" panel for a single game (Spin Wheel or Scratch
+/// Card) at a booth — pulls from the shared `prize_wins` collection (every
+/// physical prize win, across Lucky Draw/Spin Wheel/Scratch Card, is logged
+/// there — see FirestoreService.playPrizeGame/recordLuckyDrawPrizeWin), but
+/// filtered to [gameType] so this game's panel never shows another game's
+/// winners at the same booth. Masks each winner's name (see maskWinnerName).
+/// Renders nothing while there are no wins yet for this game, so it never
+/// shows an empty/awkward box.
 class RecentWinnersList extends StatelessWidget {
   const RecentWinnersList({
     super.key,
     required this.boothId,
+    required this.gameType,
     this.color = AppColors.accent,
   });
 
   final String boothId;
+  final String gameType;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
     final fs = FirestoreService();
     return StreamBuilder<List<PrizeWinModel>>(
-      stream: fs.getRecentPrizeWins(boothId),
+      stream: fs.getRecentPrizeWins(boothId, gameType: gameType),
       builder: (context, snap) {
         final wins = snap.data ?? [];
         if (wins.isEmpty) return const SizedBox.shrink();

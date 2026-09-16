@@ -12,6 +12,13 @@ import 'game_common.dart';
 /// the visitor gets up to [GuessNumberConfig.maxAttempts] guesses with
 /// automatic Higher/Lower feedback after each one, plus the exhibitor's
 /// optional hint, revealable any time.
+///
+/// Every visitor at a booth is guessing the SAME shared answer
+/// ([GuessNumberConfig.currentSecret]) — this screen only snapshots it into
+/// [_secret] once, when a round starts, so it can't shift under a visitor
+/// mid-round even if someone else solves it or the exhibitor edits it in
+/// the meantime. A correct guess rolls a fresh shared answer for whoever
+/// plays next (see FirestoreService.rerollGuessNumberSecret).
 class GuessNumberScreen extends StatefulWidget {
   const GuessNumberScreen({
     super.key,
@@ -66,8 +73,10 @@ class _GuessNumberScreenState extends State<GuessNumberScreen> {
 
   void _start() {
     final config = _config!;
+    final sharedSecret = config.currentSecret;
     setState(() {
-      _secret = config.minValue + _rand.nextInt(config.maxValue - config.minValue + 1);
+      _secret = sharedSecret ??
+          (config.minValue + _rand.nextInt(config.maxValue - config.minValue + 1));
       _started = true;
       _gameOver = false;
       _hintRevealed = false;
@@ -75,6 +84,17 @@ class _GuessNumberScreenState extends State<GuessNumberScreen> {
       _guessCtrl.clear();
       _startedAt = DateTime.now();
     });
+    if (sharedSecret == null) {
+      // Legacy doc saved before the shared-answer feature — backfill it so
+      // future visitors at this booth share one answer instead of each
+      // getting their own private one.
+      _fs
+          .rerollGuessNumberSecret(
+              widget.exhibitorId, config.minValue, config.maxValue)
+          .then((s) {
+        if (mounted) setState(() => _config = config.copyWith(currentSecret: s));
+      });
+    }
   }
 
   Future<void> _submitGuess() async {
@@ -94,6 +114,12 @@ class _GuessNumberScreenState extends State<GuessNumberScreen> {
         _guesses.insert(0, _GuessEntry(guess, 'correct'));
         _gameOver = true;
       });
+      // Roll a fresh shared answer for whoever plays next at this booth.
+      final newSecret = await _fs.rerollGuessNumberSecret(
+          widget.exhibitorId, config.minValue, config.maxValue);
+      if (mounted) {
+        setState(() => _config = config.copyWith(currentSecret: newSecret));
+      }
       await _finish(won: true, config: config);
       return;
     }

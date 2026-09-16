@@ -70,6 +70,17 @@ rules_version = '2';
 //  visitor could in principle manipulate their own view of a booth's
 //  remaining prize stock. Same limited blast radius as above: a visitor's
 //  own play experience only, never another user's or exhibitor's data.
+//  GUESS THE NUMBER / CODE BREAKER SHARED-ANSWER round: each booth now has
+//  ONE shared answer per game (not a private one per visitor), auto-rolled
+//  to a fresh value by the solving visitor's own client right after they
+//  crack it (see FirestoreService.rerollGuessNumberSecret/
+//  rerollCodeBreakerSecret) so the next visitor gets a new answer. Same
+//  trade-off class as the stock decrement just above: the write is bound to
+//  ONLY the `currentSecret` field on an existing guess_number/code_breaker
+//  doc the visitor doesn't own, but doesn't verify server-side that they
+//  actually solved it first — a modified client could reroll early. Same
+//  limited blast radius: at most, that visitor spoils the puzzle for the
+//  next person at that booth, nothing account- or data-level.
 //
 //  PRIZE WIN NOTIFICATIONS round: Lucky Draw joining and Rewards Shop
 //  redemption now require a REGISTERED (non-anonymous) account —
@@ -448,6 +459,15 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && resource.data.gameType in ['spin_wheel', 'scratch_card']
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['segments']);
+
+      // Guess the Number / Code Breaker's auto-reroll-on-solve — the
+      // solving visitor's own client sets a fresh shared answer for the
+      // next visitor, bounded to ONLY the `currentSecret` field on an
+      // existing doc they don't own. See the top-of-file honest-limitation
+      // note for what this doesn't close.
+      allow update: if isSignedIn()
+        && resource.data.gameType in ['guess_number', 'code_breaker']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentSecret']);
 
       allow delete: if false;
     }

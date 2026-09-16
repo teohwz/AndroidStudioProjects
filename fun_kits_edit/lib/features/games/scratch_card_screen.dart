@@ -243,7 +243,9 @@ class _ScratchCardScreenState extends State<ScratchCardScreen> {
                                     fontWeight: FontWeight.w700,
                                     color: palette.textMedium)),
                           RecentWinnersList(
-                              boothId: widget.exhibitorId, color: color),
+                              boothId: widget.exhibitorId,
+                              gameType: 'scratch_card',
+                              color: color),
                         ],
                       ),
                     ),

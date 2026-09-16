@@ -33,10 +33,14 @@ class ReflexTapScreen extends StatefulWidget {
 }
 
 class _ReflexTapScreenState extends State<ReflexTapScreen> {
-  static const int _gridCount = 9; // 3x3
+  static const int _crossAxisCount = 3; // columns stay fixed — rows grow
+  static const int _startRows = 3; // 3x3 to start
+  static const int _maxRows = 9; // caps out at 3x9 = 27 tiles
+  static const int _tapsPerRow = 5; // a new row every N correct taps
   static const int _startLives = 3;
   static const int _startIntervalMs = 1400;
-  static const int _minIntervalMs = 450;
+  static const int _minIntervalMs = 300;
+  static const int _rampStepMs = 100; // cut per correct tap (was 60)
 
   final _rand = Random();
   Timer? _tileTimer;
@@ -45,9 +49,17 @@ class _ReflexTapScreenState extends State<ReflexTapScreen> {
   int _lives = _startLives;
   int _score = 0;
   int _intervalMs = _startIntervalMs;
+  int _rows = _startRows;
+  int _correctTaps = 0; // counts toward the next row, resets each round
   bool _running = false;
   bool _gameOver = false;
   DateTime? _startedAt;
+
+  // Board grows one row (3 more tiles) at a time as the round goes on,
+  // floored at _startRows and capped at _maxRows so it never outgrows a
+  // phone screen. Existing tile indices stay valid when this grows since
+  // new tiles are only ever appended at the end.
+  int get _gridCount => _crossAxisCount * _rows;
 
   @override
   void dispose() {
@@ -60,6 +72,8 @@ class _ReflexTapScreenState extends State<ReflexTapScreen> {
       _lives = _startLives;
       _score = 0;
       _intervalMs = _startIntervalMs;
+      _rows = _startRows;
+      _correctTaps = 0;
       _running = true;
       _gameOver = false;
       _activeTile = -1;
@@ -108,7 +122,13 @@ class _ReflexTapScreenState extends State<ReflexTapScreen> {
         _score += 10 + ((_startIntervalMs - _intervalMs) ~/ 100);
         _activeTile = -1;
         // Ramp difficulty — faster tiles, floored at _minIntervalMs.
-        _intervalMs = max(_minIntervalMs, _intervalMs - 60);
+        _intervalMs = max(_minIntervalMs, _intervalMs - _rampStepMs);
+        // ...and a bigger board — one more row every _tapsPerRow correct
+        // taps, capped at _maxRows.
+        _correctTaps += 1;
+        if (_correctTaps % _tapsPerRow == 0 && _rows < _maxRows) {
+          _rows += 1;
+        }
       });
       _scheduleNextTile();
     } else {
@@ -204,33 +224,50 @@ class _ReflexTapScreenState extends State<ReflexTapScreen> {
               )
             else
               Expanded(
-                child: GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    mainAxisSpacing: 14,
-                    crossAxisSpacing: 14,
-                  ),
-                  itemCount: _gridCount,
-                  itemBuilder: (context, i) {
-                    final lit = i == _activeTile;
-                    return GestureDetector(
-                      onTap: () => _onTapTile(i),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 120),
-                        decoration: BoxDecoration(
-                          color: lit ? color : color.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: lit
-                              ? [
-                                  BoxShadow(
-                                      color: color.withOpacity(0.5),
-                                      blurRadius: 16,
-                                      spreadRadius: 2),
-                                ]
-                              : null,
-                        ),
+                // A LayoutBuilder + computed childAspectRatio, not a fixed
+                // square tile: the board can't scroll (that'd be unplayable
+                // against a countdown timer), so as _rows grows, tiles must
+                // shrink to keep every row on-screen and tappable instead of
+                // clipping extra rows off the bottom.
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const spacing = 14.0;
+                    final tileW = (constraints.maxWidth -
+                            spacing * (_crossAxisCount - 1)) /
+                        _crossAxisCount;
+                    final tileH =
+                        (constraints.maxHeight - spacing * (_rows - 1)) /
+                            _rows;
+                    return GridView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: _crossAxisCount,
+                        mainAxisSpacing: spacing,
+                        crossAxisSpacing: spacing,
+                        childAspectRatio: tileW / tileH,
                       ),
+                      itemCount: _gridCount,
+                      itemBuilder: (context, i) {
+                        final lit = i == _activeTile;
+                        return GestureDetector(
+                          onTap: () => _onTapTile(i),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 120),
+                            decoration: BoxDecoration(
+                              color: lit ? color : color.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: lit
+                                  ? [
+                                      BoxShadow(
+                                          color: color.withOpacity(0.5),
+                                          blurRadius: 16,
+                                          spreadRadius: 2),
+                                    ]
+                                  : null,
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),

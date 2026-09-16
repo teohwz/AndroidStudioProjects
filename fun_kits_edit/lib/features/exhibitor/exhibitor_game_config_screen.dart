@@ -8,6 +8,7 @@ import '../admin/manage_spin_wheel_screen.dart';
 import '../admin/manage_scratch_card_screen.dart';
 import '../admin/manage_guess_number_screen.dart';
 import '../admin/manage_memory_cards_screen.dart';
+import '../admin/manage_code_breaker_screen.dart';
 
 /// Enable/disable each of the 6 generic booth games and set how many
 /// points completing it awards at THIS booth. Quiz and Lucky Draw aren't
@@ -63,7 +64,14 @@ class ExhibitorGameConfigScreen extends StatelessWidget {
                   fs: fs,
                   customizeBuilder: g.key == 'memory_matrix'
                       ? (context) => ManageMemoryCardsScreen(boothId: boothId)
-                      : null,
+                      : g.key == 'code_breaker'
+                          ? (context) => ManageCodeBreakerScreen(boothId: boothId)
+                          : null,
+                  customizeLabel:
+                      g.key == 'code_breaker' ? 'Customize Code' : 'Customize Images',
+                  customizeIcon: g.key == 'code_breaker'
+                      ? Icons.lock_outline_rounded
+                      : Icons.image_outlined,
                 ),
               Padding(
                 padding: const EdgeInsets.only(top: 8, bottom: 12),
@@ -121,6 +129,8 @@ class _GameConfigCard extends StatefulWidget {
     required this.config,
     required this.fs,
     this.customizeBuilder,
+    this.customizeLabel = 'Customize Images',
+    this.customizeIcon = Icons.image_outlined,
   });
 
   final String boothId;
@@ -129,9 +139,11 @@ class _GameConfigCard extends StatefulWidget {
   final IconData icon;
   final BoothGameConfig config;
   final FirestoreService fs;
-  /// When set, shows a "Customize" button that pushes this screen — used
-  /// only by Memory Matrix right now, for its pair images.
+  /// When set, shows a "Customize" button that pushes this screen — used by
+  /// Memory Matrix (pair images) and Code Breaker (shared code).
   final WidgetBuilder? customizeBuilder;
+  final String customizeLabel;
+  final IconData customizeIcon;
 
   @override
   State<_GameConfigCard> createState() => _GameConfigCardState();
@@ -240,8 +252,8 @@ class _GameConfigCardState extends State<_GameConfigCard> {
               child: TextButton.icon(
                 onPressed: () => Navigator.push(context,
                     MaterialPageRoute(builder: widget.customizeBuilder!)),
-                icon: const Icon(Icons.image_outlined, size: 16),
-                label: const Text('Customize Images'),
+                icon: Icon(widget.customizeIcon, size: 16),
+                label: Text(widget.customizeLabel),
               ),
             ),
         ],
