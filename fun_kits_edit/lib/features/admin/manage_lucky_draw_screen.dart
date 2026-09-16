@@ -215,6 +215,14 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
     final theme = Theme.of(context);
     final palette = theme.extension<AppPalette>()!;
     final color = palette.luckyDrawColor;
+    // Confirmed requirement: once a draw is closed — its timer has run out
+    // OR a winner has already been picked, whichever comes first — it can
+    // no longer be edited. These are two independent signals (a draw can
+    // time out with no winner yet, or a winner can be drawn before the
+    // timer runs out), so both are checked here rather than relying on
+    // just the Active/Closed badge above (which only reflects `isActive`,
+    // i.e. only the winner-drawn signal).
+    final closed = !d.isActive || d.hasEnded;
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 2,
@@ -354,11 +362,15 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
                   ),
                 if (d.isActive && d.winnerUid == null)
                   const SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(Icons.edit_outlined,
-                      color: palette.textMedium, size: 20),
-                  onPressed: widget.onEdit,
-                ),
+                // Hidden entirely once closed (confirmed requirement) —
+                // only Delete remains available for a draw that's timed
+                // out or already has a winner.
+                if (!closed)
+                  IconButton(
+                    icon: Icon(Icons.edit_outlined,
+                        color: palette.textMedium, size: 20),
+                    onPressed: widget.onEdit,
+                  ),
                 IconButton(
                   icon: Icon(Icons.delete_outline,
                       color: palette.danger, size: 20),
@@ -386,6 +398,12 @@ class _DrawFormDialog extends StatefulWidget {
 }
 
 class _DrawFormDialogState extends State<_DrawFormDialog> {
+  // The "Open duration" dropdown's fixed preset options — kept as one
+  // shared list (rather than duplicated where the DropdownButton builds
+  // its items) specifically so initState's nearest-preset snap below can
+  // never drift out of sync with what the dropdown actually offers.
+  static const _durationPresets = [1, 2, 6, 12, 24, 48, 72];
+
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _title;
   late final TextEditingController _prize;
@@ -403,8 +421,20 @@ class _DrawFormDialogState extends State<_DrawFormDialog> {
     _prizeType = e?.prizeType ?? 'points';
     _pointsCtrl = TextEditingController(text: '${e?.pointsValue ?? 100}');
     if (e?.endsAt != null) {
-      final hrs = e!.endsAt!.difference(DateTime.now()).inHours;
-      _durationHours = hrs.clamp(1, 72);
+      // This is the time REMAINING until the existing draw closes, not the
+      // duration it was originally created with — a live, ever-changing
+      // number (71, 43, whatever "hours left" happens to be right now),
+      // while the dropdown below only offers 7 fixed presets. Using it
+      // directly as `_durationHours` almost never lands exactly on one of
+      // them, which crashed this dialog with a DropdownButton assertion
+      // ("There should be exactly one item with ... value: 71") the moment
+      // an exhibitor reopened an existing draw to edit it. Snapping to
+      // whichever preset is numerically closest keeps the same "roughly
+      // how long is left" intent while guaranteeing the dropdown's
+      // starting value is always one of its own items.
+      final hrs = e!.endsAt!.difference(DateTime.now()).inHours.clamp(1, 72);
+      _durationHours = _durationPresets
+          .reduce((a, b) => (hrs - a).abs() <= (hrs - b).abs() ? a : b);
     }
   }
 
@@ -518,7 +548,7 @@ class _DrawFormDialogState extends State<_DrawFormDialog> {
                     const Spacer(),
                     DropdownButton<int>(
                       value: _durationHours,
-                      items: [1, 2, 6, 12, 24, 48, 72]
+                      items: _durationPresets
                           .map((h) => DropdownMenuItem(
                               value: h,
                               child: Text('$h hr${h > 1 ? 's' : ''}')))
