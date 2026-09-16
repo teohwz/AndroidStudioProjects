@@ -9,10 +9,16 @@ import 'scan_redeem_screen.dart';
 /// Exhibitor-scoped hand-out checklist for physical prizes won at [boothId]
 /// via the Spin Wheel, Scratch Card, or Lucky Draw (points wins are paid
 /// out automatically and never appear here — see
-/// FirestoreService.playPrizeGame/recordLuckyDrawPrizeWin). Tick a win off
-/// once the visitor has collected it in person, or use "Scan to Redeem" to
-/// verify their code first (see ScanRedeemScreen) — the checkbox stays as a
-/// deliberate manual fallback either way.
+/// FirestoreService.playPrizeGame/recordLuckyDrawPrizeWin).
+///
+/// Marking a prize collected is ONLY possible by verifying the visitor's
+/// redemption code (confirmed requirement — the checkbox no longer works
+/// as an unverified manual override): tapping a pending ("To Hand Out")
+/// tile opens Scan to Redeem locked to that specific prize (see
+/// ScanRedeemScreen/FirestoreService.redeemPrizeCode), and the app bar's
+/// scan icon opens the same screen unscoped for any prize at this booth.
+/// A prize that's already collected keeps a checkbox, but only to un-tick
+/// it (undo a mis-scan) — see FirestoreService.unmarkPrizeCollected.
 ///
 /// Grouped by game first (so the exhibitor can tell at a glance which part
 /// of their booth a win came from), then by To Hand Out / Collected within
@@ -169,24 +175,60 @@ class _PrizeWinTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final palette = theme.extension<AppPalette>()!;
+
+    if (!win.collected) {
+      // Pending — no more unverified "tick to collect" affordance (see
+      // this screen's doc comment). Tapping the tile opens Scan to Redeem
+      // locked to THIS prize, so a different visitor's still-valid code
+      // gets rejected instead of silently collecting the wrong win.
+      return Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        elevation: 2,
+        color: theme.colorScheme.surface,
+        child: ListTile(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => ScanRedeemScreen(
+              boothId: win.boothId,
+              lockedWinId: win.id,
+              lockedPrizeLabel: win.prizeLabel,
+              lockedUserName: win.userName,
+            ),
+          )),
+          leading: Icon(Icons.qr_code_scanner_rounded, color: palette.textMedium),
+          title: Text(win.prizeLabel,
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+          // Which game this came from is shown once, in the section header
+          // above, rather than repeated on every tile.
+          subtitle: Text('${win.userName} — tap to scan & verify',
+              style: TextStyle(color: palette.textMedium)),
+          trailing: Icon(Icons.chevron_right_rounded,
+              color: palette.textMedium.withOpacity(0.7)),
+        ),
+      );
+    }
+
+    // Collected — the checkbox now only ever un-ticks (undoes a mis-scan);
+    // there's no path back to `true` from here, that's redeemPrizeCode's
+    // job alone. Always rendered checked, so onChanged only ever fires
+    // with `false`.
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      elevation: win.collected ? 0.5 : 2,
-      color: win.collected
-          ? palette.cardBg.withOpacity(0.5)
-          : theme.colorScheme.surface,
+      elevation: 0.5,
+      color: palette.cardBg.withOpacity(0.5),
       child: CheckboxListTile(
-        value: win.collected,
-        onChanged: (v) => fs.markPrizeCollected(win.id, v ?? false),
+        value: true,
+        onChanged: (v) {
+          if (v == false) fs.unmarkPrizeCollected(win.id);
+        },
         activeColor: palette.success,
         controlAffinity: ListTileControlAffinity.leading,
         title: Text(win.prizeLabel,
-            style: TextStyle(
+            style: const TextStyle(
                 fontWeight: FontWeight.w700,
-                decoration: win.collected ? TextDecoration.lineThrough : null)),
-        // Which game this came from is now shown once, in the section
-        // header above, rather than repeated on every tile.
+                decoration: TextDecoration.lineThrough)),
         subtitle: Text(win.userName),
       ),
     );

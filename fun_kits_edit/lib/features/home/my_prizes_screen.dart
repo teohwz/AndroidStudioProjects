@@ -11,8 +11,8 @@ import '../../core/theme/app_palette.dart';
 /// a redemption QR/code again after the original win pop-up (which only
 /// ever showed once) has been dismissed. Reached from Profile > My Prizes.
 /// See FirestoreService.redeemPrizeCode for how an exhibitor verifies one
-/// of these codes at their booth, and markPrizeCollected for the pre-
-/// existing manual fallback exhibitors can still use without a code.
+/// of these codes at their booth — the only way it can be marked collected;
+/// there is no manual fallback exhibitors can use without a code.
 class MyPrizesScreen extends StatelessWidget {
   const MyPrizesScreen({super.key});
 

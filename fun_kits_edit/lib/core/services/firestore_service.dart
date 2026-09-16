@@ -2025,12 +2025,25 @@ class FirestoreService {
             snap.docs.map((d) => PrizeWinModel.fromMap(d.id, d.data())).toList());
   }
 
-  /// Ticks a physical prize win as handed out in person (or un-ticks it).
-  /// Kept as a deliberate manual fallback alongside [redeemPrizeCode] — see
-  /// that method's doc comment.
+  /// Sets a physical prize win's collected flag directly. Internal
+  /// primitive — [redeemPrizeCode] is the only path allowed to flip this to
+  /// `true` (the visitor's code must be verified first). The UI's one
+  /// remaining manual override is un-collecting a mistake; see
+  /// [unmarkPrizeCollected].
   Future<void> markPrizeCollected(String winId, bool collected) async {
     await _db.collection('prize_wins').doc(winId).update({'collected': collected});
   }
+
+  /// Un-ticks a physical prize win that was collected in error (e.g. a
+  /// mis-scan) — confirmed as the one manual override that should survive
+  /// on `prize_wins.collected` now that marking a prize AS collected must
+  /// go through [redeemPrizeCode]. The exhibitor's Prize Wins checklist
+  /// used to also let a pending prize be ticked collected by hand with no
+  /// code check at all; that was confirmed as an unwanted trust gap and
+  /// removed. Undoing a wrongly-collected prize carries no such risk (it
+  /// only ever makes the checklist MORE conservative), so it stays.
+  Future<void> unmarkPrizeCollected(String winId) =>
+      markPrizeCollected(winId, false);
 
   /// A visitor's own physical prize wins across every booth, newest first —
   /// powers the My Prizes screen so a redemption code/QR can still be found
@@ -2051,21 +2064,29 @@ class FirestoreService {
   }
 
   /// Verifies a physical prize's redemption code and, if valid, marks it
-  /// collected — this is the actual enforcement behind "the visitor must
-  /// show their code to redeem" (the pre-existing [markPrizeCollected]
-  /// checkbox stays available too, as a deliberate fallback for a lost or
-  /// unscannable code — confirmed scope, not an oversight).
+  /// collected — the ONLY way a prize win can be marked collected (see
+  /// [markPrizeCollected]'s doc comment; the exhibitor's checklist no
+  /// longer offers an unverified manual alternative).
   ///
   /// [winId] is set when the code came from a scanned QR
   /// (`funkits:prize:<winId>:<code>`, decoded by the exhibitor's scan
   /// screen) — a direct doc lookup. When it's null (the visitor read the
   /// code aloud and the exhibitor typed it in), this falls back to a
-  /// boothId+redemptionCode query instead. Either way the same checks run:
-  /// right booth, actually physical, code matches, not already collected.
+  /// boothId+redemptionCode query instead.
+  ///
+  /// [lockedWinId] is set when the exhibitor opened the scanner from a
+  /// SPECIFIC pending prize's tile (rather than the general scan icon) —
+  /// confirmed requirement: that scan session must only ever redeem THAT
+  /// prize, so a different visitor's still-valid code is rejected with
+  /// 'wrong_prize' instead of silently collecting the wrong win.
+  ///
+  /// Either way, the same checks run: right prize (if locked), right
+  /// booth, actually physical, code matches, not already collected.
   Future<RedeemPrizeResult> redeemPrizeCode({
     required String boothId,
     required String code,
     String? winId,
+    String? lockedWinId,
   }) async {
     PrizeWinModel? win;
     if (winId != null) {
@@ -2083,6 +2104,9 @@ class FirestoreService {
       }
     }
     if (win == null) return const RedeemPrizeResult.failure('not_found');
+    if (lockedWinId != null && win.id != lockedWinId) {
+      return const RedeemPrizeResult.failure('wrong_prize');
+    }
     if (win.boothId != boothId) return const RedeemPrizeResult.failure('wrong_booth');
     if (win.isPointsPrize) return const RedeemPrizeResult.failure('points_prize');
     if (win.redemptionCode.isEmpty || win.redemptionCode != code) {
@@ -2372,8 +2396,8 @@ class PrizeWinResult {
 
 /// Result of [FirestoreService.redeemPrizeCode] — [success] is null-safe to
 /// check first; [win] (the redeemed prize) is only set on success,
-/// [failureReason] ('not_found', 'wrong_booth', 'points_prize',
-/// 'invalid_code', 'already_collected') only on failure.
+/// [failureReason] ('not_found', 'wrong_prize', 'wrong_booth',
+/// 'points_prize', 'invalid_code', 'already_collected') only on failure.
 class RedeemPrizeResult {
   final bool success;
   final PrizeWinModel? win;

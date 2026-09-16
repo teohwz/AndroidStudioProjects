@@ -9,14 +9,32 @@ import '../../core/theme/app_palette.dart';
 
 /// Exhibitor-scoped camera scanner for verifying a visitor's physical-prize
 /// redemption code and marking it collected — see
-/// FirestoreService.redeemPrizeCode. Reached from the "Scan to Redeem"
-/// button on ExhibitorPrizeWinsScreen. Mirrors QrScanScreen's booth
-/// check-in pattern exactly: live camera scan, a manual code-entry field
-/// as fallback, and picking an existing photo from the gallery.
+/// FirestoreService.redeemPrizeCode. Reached either from the "Scan to
+/// Redeem" icon on ExhibitorPrizeWinsScreen's app bar (unscoped — any valid
+/// prize at this booth), or by tapping a specific pending prize tile there,
+/// which sets [lockedWinId]/[lockedPrizeLabel]/[lockedUserName] so THIS
+/// session can only ever redeem that one prize (confirmed requirement — a
+/// different visitor's still-valid code is rejected with a clear "wrong
+/// prize" message instead of silently collecting it). Mirrors
+/// QrScanScreen's booth check-in pattern exactly: live camera scan, a
+/// manual code-entry field as fallback, and picking an existing photo from
+/// the gallery.
 class ScanRedeemScreen extends StatefulWidget {
-  const ScanRedeemScreen({super.key, required this.boothId});
+  const ScanRedeemScreen({
+    super.key,
+    required this.boothId,
+    this.lockedWinId,
+    this.lockedPrizeLabel,
+    this.lockedUserName,
+  });
 
   final String boothId;
+
+  /// When set, this scan session only accepts THIS prize's code — see this
+  /// class's doc comment.
+  final String? lockedWinId;
+  final String? lockedPrizeLabel;
+  final String? lockedUserName;
 
   @override
   State<ScanRedeemScreen> createState() => _ScanRedeemScreenState();
@@ -79,6 +97,7 @@ class _ScanRedeemScreenState extends State<ScanRedeemScreen> {
         boothId: widget.boothId,
         code: code,
         winId: winId,
+        lockedWinId: widget.lockedWinId,
       );
       if (!mounted) return;
 
@@ -136,6 +155,10 @@ class _ScanRedeemScreenState extends State<ScanRedeemScreen> {
     switch (reason) {
       case 'not_found':
         return 'No prize found with that code at this booth.';
+      case 'wrong_prize':
+        return "That code belongs to a different prize. Make sure you're "
+            "scanning ${widget.lockedUserName ?? 'this visitor'}'s code for "
+            "${widget.lockedPrizeLabel ?? 'this prize'}.";
       case 'wrong_booth':
         return 'That code belongs to a different booth.';
       case 'points_prize':
@@ -260,6 +283,39 @@ class _ScanRedeemScreenState extends State<ScanRedeemScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Only shown when opened from a specific pending prize's
+                  // tile (see this class's doc comment) — a quick visual
+                  // confirmation of which prize/visitor this scan session
+                  // is locked to, since a mismatched code is rejected
+                  // rather than collecting the wrong win.
+                  if (widget.lockedWinId != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.lock_rounded,
+                              size: 14, color: Colors.white70),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Verifying: ${widget.lockedPrizeLabel ?? 'this prize'} '
+                              'for ${widget.lockedUserName ?? 'this visitor'}',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   const Text(
                       "Scan a visitor's prize QR, or pick a photo from your "
                       "gallery",
