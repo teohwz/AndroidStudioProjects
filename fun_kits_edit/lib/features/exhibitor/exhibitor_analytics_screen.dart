@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -191,37 +193,46 @@ class ExhibitorAnalyticsScreen extends StatelessWidget {
       );
 }
 
-/// Smallest "nice" (5/10/20/50/100/...) axis-label interval that's still
-/// close to the given value, so `value` rounded up to a multiple of the
-/// result always lands on a whole, evenly-spaced tick. Without an explicit
-/// `interval` on a bar chart's left axis, fl_chart auto-picks its own tick
-/// spacing AND always draws one extra label exactly at `maxY` — when
-/// `maxY` is a fractional, off-grid value (e.g. `count * 1.25`), that
-/// extra label doesn't line up with the regular ticks and visually
-/// overlaps/wraps with the one just below it (the garbled-axis bug this
-/// fixes, across all 3 charts on this screen). Same fix already applied to
-/// `my_stats_screen.dart`'s Average-Score-by-Game chart earlier this
-/// project — duplicated here rather than shared, matching this codebase's
-/// existing per-file convention for small chart helpers.
+/// Picks a "nice" axis-label interval — 1, 2, or 5 × a power of ten —
+/// sized so the axis draws roughly [targetTicks] labels no matter how
+/// large or small `maxValue` is. This is the standard "nice numbers for
+/// graph labels" approach: rather than a hand-maintained list of
+/// thresholds (this used to be a flat 5/10/20/50 ladder that topped out at
+/// 50 for anything above 100 — fine for play counts, but "Daily Points
+/// Distributed" can reach hundreds of points on an active day, and a max
+/// around 1000 with a fixed interval of 50 drew ~20 labels squeezed into
+/// this screen's ~200px-tall chart — the cluttered, overlapping y-axis
+/// that was reported), it derives the interval directly from `maxValue`'s
+/// own magnitude, so it keeps adapting automatically as the numbers grow
+/// (or shrink) without ever needing another tier added by hand.
 ///
-/// The tiers above 100 used to jump straight to a flat 50 no matter how
-/// large `value` got — fine for play counts (small numbers) but not for
-/// "Daily Points Distributed," where a single active day can rack up
-/// hundreds of points. A max around 1000 with a fixed interval of 50 drew
-/// ~20 labels squeezed into this screen's ~200px-tall chart, which is what
-/// actually produced the cluttered, overlapping y-axis (not a rendering
-/// bug — just too many ticks for the space). Extending the "nice" ladder
-/// (100/200/250/500/1000) keeps the label count in roughly the same
-/// readable range regardless of magnitude.
-double _niceAxisInterval(double value) {
-  if (value <= 20) return 5;
-  if (value <= 50) return 10;
-  if (value <= 100) return 20;
-  if (value <= 250) return 50;
-  if (value <= 500) return 100;
-  if (value <= 1000) return 200;
-  if (value <= 2500) return 500;
-  return 1000;
+/// `maxValue` rounded up to a multiple of the result always lands on a
+/// whole, evenly-spaced tick — see the call sites' comments for why that
+/// matters (fl_chart's own extra always-drawn label at `maxY` otherwise
+/// falls off-grid and overlaps the tick below it). Same fix already
+/// applied to `my_stats_screen.dart`'s Average-Score-by-Game chart earlier
+/// this project — duplicated here rather than shared, matching this
+/// codebase's existing per-file convention for small chart helpers.
+double _niceAxisInterval(double maxValue, {int targetTicks = 5}) {
+  if (maxValue <= 0) return 1;
+  final rawStep = maxValue / targetTicks;
+  // Round rawStep down to its order of magnitude (1, 10, 100, ...), then
+  // pick whichever of ×1/×2/×5/×10 of that magnitude rawStep is closest to
+  // without going under it — the classic 1-2-5 "nice number" sequence.
+  final magnitude =
+      math.pow(10, (math.log(rawStep) / math.ln10).floor()).toDouble();
+  final residual = rawStep / magnitude;
+  final double niceResidual;
+  if (residual > 5) {
+    niceResidual = 10;
+  } else if (residual > 2) {
+    niceResidual = 5;
+  } else if (residual > 1) {
+    niceResidual = 2;
+  } else {
+    niceResidual = 1;
+  }
+  return niceResidual * magnitude;
 }
 
 class _DayAgg {
