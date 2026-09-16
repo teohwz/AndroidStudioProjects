@@ -58,6 +58,12 @@ class ExhibitorModel {
   final String secondaryColorHex;
   final String backgroundColorHex;
   final String welcomeMessage;
+  /// Color of the booth-name text AND the booth-number/category line
+  /// underneath it in the visitor-facing header (see booth_screen.dart's
+  /// hero section, and booth_preview_screen.dart's mirror of it) — both
+  /// were previously hardcoded white/white70. Defaults to white so existing
+  /// booths (saved before this field existed) render exactly as before.
+  final String headerTextColorHex;
   /// Super Admin can deactivate a booth (e.g. exhibitor left early) without
   /// deleting its data. An inactive booth's QR/listing stops working for
   /// visitors but the exhibitor's own data is preserved.
@@ -92,6 +98,7 @@ class ExhibitorModel {
     this.secondaryColorHex = '#FF6584',
     this.backgroundColorHex = '#F8F7FF',
     this.welcomeMessage = '',
+    this.headerTextColorHex = '#FFFFFF',
     this.isActive = true,
     this.gameConfig = const {},
     this.qrPresetStyle = 'plain',
@@ -104,6 +111,8 @@ class ExhibitorModel {
       int.parse(secondaryColorHex.replaceFirst('#', '0xFF')));
   Color get backgroundColor => Color(
       int.parse(backgroundColorHex.replaceFirst('#', '0xFF')));
+  Color get headerTextColor => Color(
+      int.parse(headerTextColorHex.replaceFirst('#', '0xFF')));
 
   /// Light variant of theme color for backgrounds
   Color get themeColorLight => themeColor.withOpacity(0.12);
@@ -150,6 +159,7 @@ class ExhibitorModel {
       secondaryColorHex: map['secondaryColorHex'] ?? '#FF6584',
       backgroundColorHex: map['backgroundColorHex'] ?? '#F8F7FF',
       welcomeMessage: map['welcomeMessage'] ?? '',
+      headerTextColorHex: map['headerTextColorHex'] ?? '#FFFFFF',
       isActive: map['isActive'] ?? true,
       gameConfig: {
         for (final g in kGenericBoothGames)
@@ -179,6 +189,7 @@ class ExhibitorModel {
         'secondaryColorHex': secondaryColorHex,
         'backgroundColorHex': backgroundColorHex,
         'welcomeMessage': welcomeMessage,
+        'headerTextColorHex': headerTextColorHex,
         'isActive': isActive,
         'gameConfig': {
           for (final entry in gameConfig.entries) entry.key: entry.value.toMap(),
@@ -196,6 +207,18 @@ class ExhibitorModel {
         'name': name,
         'description': description,
         'logoUrl': logoUrl,
+        // THE actual root cause of the "banner never reaches visitors" bug:
+        // this map — what ExhibitorBoothEditorScreen._save() actually sends
+        // to Firestore — never included bannerImageUrl at all, in the
+        // app's entire history. It wasn't a rules problem or a client race;
+        // the exhibitor's screen was building the right ExhibitorModel
+        // (with the new banner URL) but this method was silently dropping
+        // that field before it ever left the device. Confirmed directly in
+        // the Firestore console: the live document had no bannerImageUrl
+        // key at all (not even an empty one) despite a separate successful
+        // customization save going through moments earlier — impossible if
+        // this map had ever included the key.
+        'bannerImageUrl': bannerImageUrl,
         'contactEmail': contactEmail,
         'contactPhone': contactPhone,
         'website': website,
@@ -205,6 +228,7 @@ class ExhibitorModel {
         'secondaryColorHex': secondaryColorHex,
         'backgroundColorHex': backgroundColorHex,
         'welcomeMessage': welcomeMessage,
+        'headerTextColorHex': headerTextColorHex,
         'qrPresetStyle': qrPresetStyle,
       };
 
@@ -227,6 +251,7 @@ class ExhibitorModel {
     String? secondaryColorHex,
     String? backgroundColorHex,
     String? welcomeMessage,
+    String? headerTextColorHex,
     bool? isActive,
     Map<String, BoothGameConfig>? gameConfig,
     String? qrPresetStyle,
@@ -252,6 +277,7 @@ class ExhibitorModel {
         secondaryColorHex: secondaryColorHex ?? this.secondaryColorHex,
         backgroundColorHex: backgroundColorHex ?? this.backgroundColorHex,
         welcomeMessage: welcomeMessage ?? this.welcomeMessage,
+        headerTextColorHex: headerTextColorHex ?? this.headerTextColorHex,
         isActive: isActive ?? this.isActive,
         gameConfig: gameConfig ?? this.gameConfig,
         qrPresetStyle: qrPresetStyle ?? this.qrPresetStyle,

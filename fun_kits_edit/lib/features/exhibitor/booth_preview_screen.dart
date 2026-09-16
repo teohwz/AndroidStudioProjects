@@ -257,8 +257,8 @@ class _Hero extends StatelessWidget {
                   ex.name.isEmpty ? 'Your Booth Name' : ex.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.white,
+                  style: TextStyle(
+                      color: ex.headerTextColor,
                       fontSize: 20,
                       fontWeight: FontWeight.w800),
                 ),
@@ -268,7 +268,9 @@ class _Hero extends StatelessWidget {
                       if (ex.boothNumber.isNotEmpty) 'Booth ${ex.boothNumber}',
                       ex.category,
                     ].join(' · '),
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    style: TextStyle(
+                        color: ex.headerTextColor.withOpacity(0.7),
+                        fontSize: 12),
                   ),
               ],
             ),

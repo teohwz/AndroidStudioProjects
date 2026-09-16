@@ -47,6 +47,9 @@ class _ExhibitorBoothEditorScreenState
   Color _primary = AppColors.primary;
   Color _secondary = AppColors.secondary;
   Color _background = AppColors.backgroundLight;
+  // Colors the booth name AND the booth-number/category line underneath it
+  // in the visitor-facing header — see ExhibitorModel.headerTextColorHex.
+  Color _headerText = Colors.white;
 
   ExhibitorModel? _current;
 
@@ -66,6 +69,7 @@ class _ExhibitorBoothEditorScreenState
     _primary = booth.themeColor;
     _secondary = booth.secondaryColor;
     _background = booth.backgroundColor;
+    _headerText = booth.headerTextColor;
     _initialized = true;
   }
 
@@ -130,6 +134,13 @@ class _ExhibitorBoothEditorScreenState
   }
 
   Future<void> _save() async {
+    // Guards against a race that could silently save a stale logo/banner
+    // URL: if the exhibitor taps Save Booth while an image is still
+    // mid-upload, _logoUrl/_bannerUrl wouldn't hold the new value yet, so
+    // the old one (or blank) would get written instead. The button itself
+    // is also disabled while either upload is in flight — see build() —
+    // this is a second guard in case _save() is ever invoked another way.
+    if (_uploadingLogo || _uploadingBanner) return;
     if (!_formKey.currentState!.validate() || _current == null) return;
     setState(() => _saving = true);
     final updated = _current!.copyWith(
@@ -144,11 +155,18 @@ class _ExhibitorBoothEditorScreenState
       themeColorHex: _toHex(_primary),
       secondaryColorHex: _toHex(_secondary),
       backgroundColorHex: _toHex(_background),
+      headerTextColorHex: _toHex(_headerText),
       logoUrl: _logoUrl,
       bannerImageUrl: _bannerUrl,
     );
-    await _fs.updateBoothCustomization(updated);
-    if (mounted) {
+    // Previously un-caught: a rejected write (e.g. Firestore security rules
+    // refusing a field it doesn't recognize yet) threw silently here, so the
+    // spinner just stopped with no feedback and the exhibitor had no way to
+    // tell a save hadn't actually gone through. Now surfaced with an error
+    // snackbar instead of failing invisibly.
+    try {
+      await _fs.updateBoothCustomization(updated);
+      if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Row(
@@ -161,6 +179,22 @@ class _ExhibitorBoothEditorScreenState
         ),
       ));
       Navigator.pop(context);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Expanded(
+                child: Text(
+                    'Could not save your booth. Check your connection and try again.')),
+          ],
+        ),
+        backgroundColor: Colors.redAccent,
+      ));
     }
   }
 
@@ -183,6 +217,7 @@ class _ExhibitorBoothEditorScreenState
       themeColorHex: _toHex(_primary),
       secondaryColorHex: _toHex(_secondary),
       backgroundColorHex: _toHex(_background),
+      headerTextColorHex: _toHex(_headerText),
       logoUrl: _logoUrl,
       bannerImageUrl: _bannerUrl,
     );
@@ -273,7 +308,11 @@ class _ExhibitorBoothEditorScreenState
                             _secondary, (c) => setState(() => _secondary = c)),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
                     Expanded(
                       child: _ColorTile(
                         label: 'Background',
@@ -282,7 +321,24 @@ class _ExhibitorBoothEditorScreenState
                             _background, (c) => setState(() => _background = c)),
                       ),
                     ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _ColorTile(
+                        label: 'Name Text',
+                        color: _headerText,
+                        onTap: () => _pickColor(
+                            _headerText, (c) => setState(() => _headerText = c)),
+                      ),
+                    ),
                   ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    'Colors your booth name and the booth number/category '
+                    'line under it, shown over your banner.',
+                    style: TextStyle(fontSize: 11, color: palette.textMedium),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 _sectionTitle('Booth Info'),
@@ -304,7 +360,9 @@ class _ExhibitorBoothEditorScreenState
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: _saving ? null : _save,
+                    onPressed: (_saving || _uploadingLogo || _uploadingBanner)
+                        ? null
+                        : _save,
                     style: FilledButton.styleFrom(
                         backgroundColor: theme.colorScheme.primary,
                         padding: const EdgeInsets.symmetric(vertical: 16)),

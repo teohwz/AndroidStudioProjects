@@ -189,8 +189,8 @@ class _BoothScreenState extends State<BoothScreen> {
                               Text(ex.name,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      color: Colors.white,
+                                  style: TextStyle(
+                                      color: ex.headerTextColor,
                                       fontSize: 20,
                                       fontWeight: FontWeight.w800)),
                               if (ex.boothNumber.isNotEmpty || ex.category.isNotEmpty)
@@ -199,8 +199,9 @@ class _BoothScreenState extends State<BoothScreen> {
                                       if (ex.boothNumber.isNotEmpty) 'Booth ${ex.boothNumber}',
                                       ex.category,
                                     ].join(' · '),
-                                    style: const TextStyle(
-                                        color: Colors.white70, fontSize: 12)),
+                                    style: TextStyle(
+                                        color: ex.headerTextColor.withOpacity(0.7),
+                                        fontSize: 12)),
                             ],
                           ),
                         ),

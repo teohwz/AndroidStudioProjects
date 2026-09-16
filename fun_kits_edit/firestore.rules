@@ -347,12 +347,20 @@ service cloud.firestore {
       // Booth customization — owner only, bounded to exactly the fields
       // ExhibitorModel.toCustomizationMap() writes. ownerUid/isActive/
       // boothNumber/isSponsored/category/tags/createdAt can never move here.
+      // NOTE: bannerImageUrl was missing from this list until 2026-09-15 —
+      // toCustomizationMap() has always included it, so any save that
+      // changed the banner was silently rejected by this rule in its
+      // entirety (not just the banner field), since affectedKeys().hasOnly()
+      // fails the whole write if ANY changed key isn't on the list. That's
+      // why a banner upload would show correctly in the exhibitor's own
+      // Preview (pure client-side state, no Firestore round-trip) but never
+      // reach visitors after tapping "Save Booth".
       allow update: if isCurrentBoothOwner()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-             'name', 'description', 'logoUrl', 'contactEmail', 'contactPhone',
-             'website', 'facebookUrl', 'instagramUrl', 'themeColorHex',
-             'secondaryColorHex', 'backgroundColorHex', 'welcomeMessage',
-             'qrPresetStyle'
+             'name', 'description', 'logoUrl', 'bannerImageUrl', 'contactEmail',
+             'contactPhone', 'website', 'facebookUrl', 'instagramUrl',
+             'themeColorHex', 'secondaryColorHex', 'backgroundColorHex',
+             'welcomeMessage', 'headerTextColorHex', 'qrPresetStyle'
            ]);
 
       // Per-game enable/points config — owner only, bounded to gameConfig.
