@@ -16,10 +16,10 @@ const List<String> _fallbackEmojis = ['🎮', '⭐', '🎨', '🎯', '🎪', '�
 /// continuity) — classic flip-two-tiles-find-the-match, using the
 /// exhibitor's own uploaded images per pair (see ManageMemoryCardsScreen /
 /// MemoryPairsConfig) so every booth's board looks different. Falls back to
-/// a generic emoji deck if the exhibitor hasn't set images. Points reward
-/// stays the flat "points on completion" value from the Game Settings
-/// screen scaled by how efficiently the visitor found every pair — no
-/// separate prize pool needed for this game.
+/// a generic emoji deck if the exhibitor hasn't set images. Points reward is
+/// the Game Settings "points on completion" value, scaled by how
+/// efficiently the visitor found every pair (see scaleGameScore in
+/// game_common.dart) — no separate prize pool needed for this game.
 class MemoryMatrixScreen extends StatefulWidget {
   const MemoryMatrixScreen({
     super.key,
@@ -143,10 +143,17 @@ class _MemoryMatrixScreenState extends State<MemoryMatrixScreen> {
     });
     final base = _pairCount * 20;
     final extraMoves = (_moves - _pairCount).clamp(0, 1000);
-    final score = (base - extraMoves * 4).clamp((_pairCount * 5), base);
+    final rawScore = (base - extraMoves * 4).clamp((_pairCount * 5), base);
     final durationMs = _startedAt == null
         ? null
         : DateTime.now().difference(_startedAt!).inMilliseconds;
+    final maxPoints =
+        await fetchGameMaxPoints(_fs, widget.exhibitorId, 'memory_matrix');
+    // Natural max is `base` (a flawless run, zero extra moves) — see
+    // scaleGameScore/fetchGameMaxPoints in game_common.dart, which convert
+    // this into a fraction of the exhibitor's configured "Points on
+    // completion" cap rather than paying out the raw number directly.
+    final score = scaleGameScore(rawScore, base, maxPoints);
     final allowed = await submitGameScore('memory_matrix', score,
         exhibitorId: widget.exhibitorId, durationMs: durationMs);
     if (!mounted) return;

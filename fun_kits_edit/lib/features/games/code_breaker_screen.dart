@@ -134,12 +134,18 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
     if (bulls == 4) _endGame(solved: true);
   }
 
+  // The raw formula below tops out at 500 (an instant 1-guess solve) — see
+  // scaleGameScore/fetchGameMaxPoints in game_common.dart, which convert
+  // this into a fraction of the exhibitor's configured "Points on
+  // completion" cap rather than paying out the raw number directly.
+  static const int _rawMax = 500;
+
   Future<void> _endGame({required bool solved}) async {
     _timer?.cancel();
     final elapsed = _totalSeconds - _secondsLeft;
-    int score;
+    int rawScore;
     if (solved) {
-      score = max(50, 500 - (_guesses.length - 1) * 40 - elapsed * 3);
+      rawScore = max(50, 500 - (_guesses.length - 1) * 40 - elapsed * 3);
       // Roll a fresh shared code for whoever plays next at this booth —
       // only if this round was actually playing the shared one (not a
       // private local fallback, which has no shared doc to update).
@@ -158,7 +164,7 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
     } else {
       final bestBulls =
           _guesses.isEmpty ? 0 : _guesses.map((g) => g.bulls).reduce(max);
-      score = bestBulls * 15;
+      rawScore = bestBulls * 15;
     }
     setState(() {
       _started = false;
@@ -167,6 +173,9 @@ class _CodeBreakerScreenState extends State<CodeBreakerScreen> {
     final durationMs = _startedAt == null
         ? null
         : DateTime.now().difference(_startedAt!).inMilliseconds;
+    final maxPoints =
+        await fetchGameMaxPoints(_fs, widget.exhibitorId, 'code_breaker');
+    final score = scaleGameScore(rawScore, _rawMax, maxPoints);
     final allowed = await submitGameScore('code_breaker', score,
         exhibitorId: widget.exhibitorId, durationMs: durationMs);
     if (!mounted) return;

@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/firestore_service.dart';
 import '../../core/theme/app_palette.dart';
 import 'game_common.dart';
 
@@ -42,7 +43,13 @@ class SpeedTypingScreen extends StatefulWidget {
 
 class _SpeedTypingScreenState extends State<SpeedTypingScreen> {
   static const int _limitSeconds = 30;
+  // The wpm/accuracy blend below already tops out at 300 — see
+  // scaleGameScore/fetchGameMaxPoints in game_common.dart, which convert
+  // this into a fraction of the exhibitor's configured "Points on
+  // completion" cap rather than paying out the raw number directly.
+  static const int _rawMax = 300;
 
+  final _fs = FirestoreService();
   final _rand = Random();
   final _ctrl = TextEditingController();
   final _focusNode = FocusNode();
@@ -104,7 +111,7 @@ class _SpeedTypingScreenState extends State<SpeedTypingScreen> {
     final words = correct / 5;
     final minutes = elapsedSeconds / 60;
     final wpm = minutes > 0 ? words / minutes : 0.0;
-    final score = (wpm * 0.6 + accuracy * 100 * 0.4).round().clamp(0, 300).toInt();
+    final rawScore = (wpm * 0.6 + accuracy * 100 * 0.4).round().clamp(0, 300).toInt();
 
     setState(() {
       _started = false;
@@ -113,6 +120,9 @@ class _SpeedTypingScreenState extends State<SpeedTypingScreen> {
     final durationMs = _startedAt == null
         ? null
         : DateTime.now().difference(_startedAt!).inMilliseconds;
+    final maxPoints =
+        await fetchGameMaxPoints(_fs, widget.exhibitorId, 'speed_typing');
+    final score = scaleGameScore(rawScore, _rawMax, maxPoints);
     final allowed = await submitGameScore('speed_typing', score,
         exhibitorId: widget.exhibitorId, durationMs: durationMs);
     if (!mounted) return;

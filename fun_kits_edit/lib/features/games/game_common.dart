@@ -2,10 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/game_types.dart';
 import '../../core/theme/app_palette.dart';
 import '../../core/services/firestore_service.dart';
 
 final _fsCommon = FirestoreService();
+
+/// Looks up how many points [gameType] is configured to award at
+/// [exhibitorId]'s booth — Game Settings' "Points on completion" — which is
+/// now the CAP a visitor's performance-scaled raw score gets scaled against
+/// (see [scaleGameScore]). Falls back to that game's kDefaultGamePoints
+/// default when played outside a booth or before the exhibitor has ever
+/// customized it, same default BoothGameConfig itself already uses.
+Future<int> fetchGameMaxPoints(
+    FirestoreService fs, String? exhibitorId, String gameType) async {
+  if (exhibitorId == null || exhibitorId.isEmpty) {
+    return kDefaultGamePoints[gameType] ?? 10;
+  }
+  final ex = await fs.getExhibitorById(exhibitorId);
+  return ex?.configFor(gameType).points ?? (kDefaultGamePoints[gameType] ?? 10);
+}
+
+/// Scales a game's raw performance score (0..[naturalMax], that game's own
+/// existing best-possible score under its scoring formula) down to the
+/// exhibitor's configured points cap for that game — see the 2026-09-16
+/// "Points on completion" round (previously every game paid out its own
+/// hardcoded raw score, up to 500 for a lucky Code Breaker solve, regardless
+/// of what the exhibitor had configured). Clamped so the result can never
+/// exceed [maxPoints], even if [rawScore] exceeds [naturalMax] (e.g. Reflex
+/// Tap's open-ended score past its 300 reference "perfect play" ceiling).
+int scaleGameScore(int rawScore, int naturalMax, int maxPoints) {
+  if (naturalMax <= 0) return 0;
+  final scaled = (rawScore / naturalMax * maxPoints).round();
+  return scaled.clamp(0, maxPoints);
+}
 
 /// Records one play of [gameType] at booth [exhibitorId] (via
 /// FirestoreService.recordGamePlay's transaction — the actual security

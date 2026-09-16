@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/firestore_service.dart';
 import '../../core/theme/app_palette.dart';
 import 'game_common.dart';
 
@@ -41,7 +42,13 @@ class _ReflexTapScreenState extends State<ReflexTapScreen> {
   static const int _startIntervalMs = 1400;
   static const int _minIntervalMs = 300;
   static const int _rampStepMs = 100; // cut per correct tap (was 60)
+  // Reflex Tap's score has no natural ceiling (it keeps climbing the longer
+  // you survive), so this is an invented reference "perfect play" score —
+  // reach it or beyond and you earn the exhibitor's full configured points;
+  // see scaleGameScore/fetchGameMaxPoints in game_common.dart.
+  static const int _referenceMaxScore = 300;
 
+  final _fs = FirestoreService();
   final _rand = Random();
   Timer? _tileTimer;
 
@@ -146,7 +153,10 @@ class _ReflexTapScreenState extends State<ReflexTapScreen> {
     final durationMs = _startedAt == null
         ? null
         : DateTime.now().difference(_startedAt!).inMilliseconds;
-    final allowed = await submitGameScore('reflex_tap', _score,
+    final maxPoints =
+        await fetchGameMaxPoints(_fs, widget.exhibitorId, 'reflex_tap');
+    final score = scaleGameScore(_score, _referenceMaxScore, maxPoints);
+    final allowed = await submitGameScore('reflex_tap', score,
         exhibitorId: widget.exhibitorId, durationMs: durationMs);
     if (!mounted) return;
     if (!allowed) {
@@ -155,9 +165,11 @@ class _ReflexTapScreenState extends State<ReflexTapScreen> {
     }
     showGameResultDialog(
       context,
-      icon: _score >= 150 ? Icons.bolt_rounded : Icons.adjust_rounded,
+      icon: score >= (maxPoints * 0.7).round()
+          ? Icons.bolt_rounded
+          : Icons.adjust_rounded,
       title: 'Round Over!',
-      message: 'You scored $_score points.',
+      message: 'You scored $score points.',
       color: widget.accentColor,
       onPlayAgain: _start,
     );

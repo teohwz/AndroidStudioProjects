@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/firestore_service.dart';
 import '../../core/theme/app_palette.dart';
 import 'game_common.dart';
 
@@ -30,7 +31,13 @@ class RgbMasterScreen extends StatefulWidget {
 class _RgbMasterScreenState extends State<RgbMasterScreen> {
   static const int _totalRounds = 3;
   static const int _roundSeconds = 20;
+  // 3 rounds x 110 max per round (100 match + up to 10 speed bonus) — see
+  // scaleGameScore/fetchGameMaxPoints in game_common.dart, which convert
+  // this into a fraction of the exhibitor's configured "Points on
+  // completion" cap rather than paying out the raw number directly.
+  static const int _rawMax = _totalRounds * 110;
 
+  final _fs = FirestoreService();
   final _rand = Random();
   Color _target = Colors.blue;
   double _r = 128, _g = 128, _b = 128;
@@ -116,7 +123,10 @@ class _RgbMasterScreenState extends State<RgbMasterScreen> {
     final durationMs = _startedAt == null
         ? null
         : DateTime.now().difference(_startedAt!).inMilliseconds;
-    final allowed = await submitGameScore('rgb_master', _totalScore,
+    final maxPoints =
+        await fetchGameMaxPoints(_fs, widget.exhibitorId, 'rgb_master');
+    final score = scaleGameScore(_totalScore, _rawMax, maxPoints);
+    final allowed = await submitGameScore('rgb_master', score,
         exhibitorId: widget.exhibitorId, durationMs: durationMs);
     if (!mounted) return;
     if (!allowed) {
@@ -125,9 +135,11 @@ class _RgbMasterScreenState extends State<RgbMasterScreen> {
     }
     showGameResultDialog(
       context,
-      icon: _totalScore >= 250 ? Icons.palette_rounded : Icons.brush_rounded,
+      icon: score >= (maxPoints * 0.7).round()
+          ? Icons.palette_rounded
+          : Icons.brush_rounded,
       title: 'Palette Complete!',
-      message: 'Total score across $_totalRounds rounds: $_totalScore points.',
+      message: 'Total score across $_totalRounds rounds: $score points.',
       color: widget.accentColor,
       onPlayAgain: _start,
     );
