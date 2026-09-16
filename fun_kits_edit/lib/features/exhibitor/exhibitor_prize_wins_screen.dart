@@ -4,12 +4,20 @@ import '../../core/constants/game_types.dart';
 import '../../core/models/game_content_model.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/theme/app_palette.dart';
+import 'scan_redeem_screen.dart';
 
 /// Exhibitor-scoped hand-out checklist for physical prizes won at [boothId]
 /// via the Spin Wheel, Scratch Card, or Lucky Draw (points wins are paid
 /// out automatically and never appear here — see
 /// FirestoreService.playPrizeGame/recordLuckyDrawPrizeWin). Tick a win off
-/// once the visitor has collected it in person.
+/// once the visitor has collected it in person, or use "Scan to Redeem" to
+/// verify their code first (see ScanRedeemScreen) — the checkbox stays as a
+/// deliberate manual fallback either way.
+///
+/// Grouped by game first (so the exhibitor can tell at a glance which part
+/// of their booth a win came from), then by To Hand Out / Collected within
+/// each game — no new data needed, [PrizeWinModel.gameType] already tags
+/// every win.
 class ExhibitorPrizeWinsScreen extends StatelessWidget {
   const ExhibitorPrizeWinsScreen({super.key, required this.boothId});
 
@@ -27,6 +35,14 @@ class ExhibitorPrizeWinsScreen extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.w800)),
         backgroundColor: palette.gold,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner_rounded),
+            tooltip: 'Scan to Redeem',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => ScanRedeemScreen(boothId: boothId))),
+          ),
+        ],
       ),
       body: StreamBuilder<List<PrizeWinModel>>(
         stream: fs.getPrizeWins(boothId),
@@ -55,31 +71,90 @@ class ExhibitorPrizeWinsScreen extends StatelessWidget {
               ),
             );
           }
-          final pending = wins.where((w) => !w.collected).toList();
-          final collected = wins.where((w) => w.collected).toList();
+          // Group by game first, in a stable, predictable order (rather
+          // than whichever order they happened to load in) — only games
+          // that actually have a win here get a section.
+          final byGame = <String, List<PrizeWinModel>>{};
+          for (final w in wins) {
+            byGame.putIfAbsent(w.gameType, () => []).add(w);
+          }
+          const gameOrder = ['spin_wheel', 'scratch_card', 'lucky_draw'];
+          final orderedGameTypes = [
+            ...gameOrder.where(byGame.containsKey),
+            ...byGame.keys.where((g) => !gameOrder.contains(g)),
+          ];
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: [
-              if (pending.isNotEmpty) ...[
-                Text('To Hand Out (${pending.length})',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 15)),
-                const SizedBox(height: 8),
-                for (final w in pending) _PrizeWinTile(win: w, fs: fs),
-                const SizedBox(height: 16),
-              ],
-              if (collected.isNotEmpty) ...[
-                Text('Collected (${collected.length})',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                        color: palette.textMedium)),
-                const SizedBox(height: 8),
-                for (final w in collected) _PrizeWinTile(win: w, fs: fs),
-              ],
+              for (final gameType in orderedGameTypes)
+                _GameSection(
+                  gameType: gameType,
+                  wins: byGame[gameType]!,
+                  fs: fs,
+                ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _GameSection extends StatelessWidget {
+  const _GameSection({required this.gameType, required this.wins, required this.fs});
+  final String gameType;
+  final List<PrizeWinModel> wins;
+  final FirestoreService fs;
+
+  GameTypeDef? _gameOf(String gameType) {
+    for (final g in kGameTypes) {
+      if (g.key == gameType) return g;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<AppPalette>()!;
+    final game = _gameOf(gameType);
+    final pending = wins.where((w) => !w.collected).toList();
+    final collected = wins.where((w) => w.collected).toList();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(game?.icon ?? Icons.card_giftcard_rounded,
+                  size: 18, color: palette.textDark),
+              const SizedBox(width: 6),
+              Text(game?.label ?? gameType,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              const SizedBox(width: 6),
+              Text('(${wins.length})',
+                  style: TextStyle(color: palette.textMedium, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (pending.isNotEmpty) ...[
+            Text('To Hand Out (${pending.length})',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+            const SizedBox(height: 6),
+            for (final w in pending) _PrizeWinTile(win: w, fs: fs),
+            const SizedBox(height: 10),
+          ],
+          if (collected.isNotEmpty) ...[
+            Text('Collected (${collected.length})',
+                style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    color: palette.textMedium)),
+            const SizedBox(height: 6),
+            for (final w in collected) _PrizeWinTile(win: w, fs: fs),
+          ],
+        ],
       ),
     );
   }
@@ -94,7 +169,6 @@ class _PrizeWinTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final palette = theme.extension<AppPalette>()!;
-    final game = _gameOf(win.gameType);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -111,24 +185,10 @@ class _PrizeWinTile extends StatelessWidget {
             style: TextStyle(
                 fontWeight: FontWeight.w700,
                 decoration: win.collected ? TextDecoration.lineThrough : null)),
-        subtitle: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('${win.userName} · '),
-            Icon(game?.icon ?? Icons.card_giftcard_rounded,
-                size: 14, color: palette.textMedium),
-            const SizedBox(width: 4),
-            Text(game?.label ?? win.gameType),
-          ],
-        ),
+        // Which game this came from is now shown once, in the section
+        // header above, rather than repeated on every tile.
+        subtitle: Text(win.userName),
       ),
     );
-  }
-
-  GameTypeDef? _gameOf(String gameType) {
-    for (final g in kGameTypes) {
-      if (g.key == gameType) return g;
-    }
-    return null;
   }
 }

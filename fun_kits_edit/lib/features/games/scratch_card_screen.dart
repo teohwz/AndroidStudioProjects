@@ -139,7 +139,7 @@ class _ScratchCardScreenState extends State<ScratchCardScreen> {
         title: won.isPoints ? 'You Won!' : 'You Won a Prize!',
         message: won.isPoints
             ? '+${won.pointsValue} points!'
-            : '${won.label} — show this screen to the booth staff to collect it!',
+            : '${won.label} — find it in My Prizes to redeem it at the booth!',
         color: widget.accentColor,
         onPlayAgain: () => setState(() => _phase = 'idle'),
       );

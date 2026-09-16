@@ -335,6 +335,12 @@ class MemoryPairsConfig {
 /// ExhibitorPrizeWinsScreen). Also powers the shared "Recent Winners" list
 /// on the Lucky Draw/Spin Wheel/Scratch Card screens (see
 /// FirestoreService.getRecentPrizeWins).
+///
+/// [redemptionCode] is the short code the winning visitor shows (as a QR or
+/// as plain digits, see MyPrizesScreen) to prove a physical win is really
+/// theirs before an exhibitor marks it collected — see
+/// FirestoreService.redeemPrizeCode. Empty for points-type wins (nothing to
+/// redeem in person) and for any doc that predates this field.
 class PrizeWinModel {
   final String id;
   final String uid;
@@ -344,6 +350,7 @@ class PrizeWinModel {
   final String prizeLabel;
   final String prizeType; // 'points' | 'physical'
   final bool collected;
+  final String redemptionCode;
   final DateTime? createdAt;
 
   const PrizeWinModel({
@@ -355,6 +362,7 @@ class PrizeWinModel {
     required this.prizeLabel,
     this.prizeType = 'physical',
     this.collected = false,
+    this.redemptionCode = '',
     this.createdAt,
   });
 
@@ -370,6 +378,7 @@ class PrizeWinModel {
         prizeLabel: map['prizeLabel'] ?? '',
         prizeType: map['prizeType'] ?? 'physical',
         collected: map['collected'] ?? false,
+        redemptionCode: map['redemptionCode'] ?? '',
         createdAt: map['createdAt'] != null
             ? (map['createdAt'] as dynamic).toDate()
             : null,
@@ -383,6 +392,7 @@ class PrizeWinModel {
         'prizeLabel': prizeLabel,
         'prizeType': prizeType,
         'collected': collected,
+        'redemptionCode': redemptionCode,
         'createdAt': createdAt,
       };
 }

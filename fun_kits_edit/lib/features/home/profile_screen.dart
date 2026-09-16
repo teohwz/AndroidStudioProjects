@@ -10,6 +10,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/firestore_service.dart';
 import '../auth/role_choice_screen.dart';
 import '../auth/visitor_register_screen.dart';
+import 'my_prizes_screen.dart';
 import '../../shared/widgets/hero_header.dart';
 import '../../shared/widgets/icon_badge.dart';
 import '../../shared/widgets/section_header.dart';
@@ -282,6 +283,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _register() {
     Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const VisitorRegisterScreen()));
+  }
+
+  void _openMyPrizes() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const MyPrizesScreen()));
   }
 
   @override
@@ -612,6 +618,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
                       sliver: SliverList(
                         delegate: SliverChildListDelegate([
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: ActionListRow(
+                              icon: Icons.card_giftcard_rounded,
+                              color: palette.gold,
+                              label: 'My Prizes',
+                              subtitle: 'Redemption codes for physical prizes you\'ve won',
+                              onTap: _openMyPrizes,
+                            ),
+                          ),
                           Padding(
                             padding: const EdgeInsets.only(bottom: 10),
                             child: ActionListRow(

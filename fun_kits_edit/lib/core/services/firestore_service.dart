@@ -1915,6 +1915,15 @@ class FirestoreService {
   /// decrementing stock server-side if it's a limited physical prize so two
   /// simultaneous plays can never both win the last unit — then pays out
   /// points immediately or logs a `prize_wins` entry for physical prizes.
+  /// A short, human-typeable redemption code for a physical prize win — the
+  /// visitor shows this (as a QR or as plain digits) at the booth to prove
+  /// they actually won it; see [redeemPrizeCode]. Not cryptographically
+  /// unique app-wide, just practically unique within one booth's realistic
+  /// prize volume — same "good enough, not a real-money system" bar this
+  /// codebase already accepts elsewhere (e.g. prize-stock decrement).
+  String _generateRedemptionCode() =>
+      (100000 + Random().nextInt(900000)).toString();
+
   Future<PrizeWinResult> playPrizeGame({
     required String uid,
     required String userName,
@@ -1960,6 +1969,7 @@ class FirestoreService {
         'gameType': gameType,
         'prizeLabel': picked.label,
         'collected': false,
+        'redemptionCode': _generateRedemptionCode(),
         'createdAt': FieldValue.serverTimestamp(),
       });
       // Physical prizes only (a points win stays silent — see the Prize Win
@@ -1970,8 +1980,8 @@ class FirestoreService {
       await _notifyUser(
         uid: uid,
         title: '🎉 You Won a Prize!',
-        body: 'You won "${picked.label}" at $boothName\'s $gameLabel! Show '
-            'your account to the booth staff to collect it.',
+        body: 'You won "${picked.label}" at $boothName\'s $gameLabel! Find '
+            'your physical prize won in My Prizes to redeem it at the booth.',
         type: 'prize_win',
       );
     }
@@ -1993,8 +2003,71 @@ class FirestoreService {
   }
 
   /// Ticks a physical prize win as handed out in person (or un-ticks it).
+  /// Kept as a deliberate manual fallback alongside [redeemPrizeCode] — see
+  /// that method's doc comment.
   Future<void> markPrizeCollected(String winId, bool collected) async {
     await _db.collection('prize_wins').doc(winId).update({'collected': collected});
+  }
+
+  /// A visitor's own physical prize wins across every booth, newest first —
+  /// powers the My Prizes screen so a redemption code/QR can still be found
+  /// after the original win dialog is dismissed. Points-type wins are
+  /// excluded (nothing to redeem in person). Needs a uid+createdAt
+  /// composite index — a new query shape, same one-time Firestore console
+  /// prompt as this session's other new queries.
+  Stream<List<PrizeWinModel>> getMyPrizeWins(String uid) {
+    return _db
+        .collection('prize_wins')
+        .where('uid', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => PrizeWinModel.fromMap(d.id, d.data()))
+            .where((w) => !w.isPointsPrize)
+            .toList());
+  }
+
+  /// Verifies a physical prize's redemption code and, if valid, marks it
+  /// collected — this is the actual enforcement behind "the visitor must
+  /// show their code to redeem" (the pre-existing [markPrizeCollected]
+  /// checkbox stays available too, as a deliberate fallback for a lost or
+  /// unscannable code — confirmed scope, not an oversight).
+  ///
+  /// [winId] is set when the code came from a scanned QR
+  /// (`funkits:prize:<winId>:<code>`, decoded by the exhibitor's scan
+  /// screen) — a direct doc lookup. When it's null (the visitor read the
+  /// code aloud and the exhibitor typed it in), this falls back to a
+  /// boothId+redemptionCode query instead. Either way the same checks run:
+  /// right booth, actually physical, code matches, not already collected.
+  Future<RedeemPrizeResult> redeemPrizeCode({
+    required String boothId,
+    required String code,
+    String? winId,
+  }) async {
+    PrizeWinModel? win;
+    if (winId != null) {
+      final snap = await _db.collection('prize_wins').doc(winId).get();
+      if (snap.exists) win = PrizeWinModel.fromMap(snap.id, snap.data()!);
+    } else {
+      final snap = await _db
+          .collection('prize_wins')
+          .where('boothId', isEqualTo: boothId)
+          .where('redemptionCode', isEqualTo: code)
+          .limit(1)
+          .get();
+      if (snap.docs.isNotEmpty) {
+        win = PrizeWinModel.fromMap(snap.docs.first.id, snap.docs.first.data());
+      }
+    }
+    if (win == null) return const RedeemPrizeResult.failure('not_found');
+    if (win.boothId != boothId) return const RedeemPrizeResult.failure('wrong_booth');
+    if (win.isPointsPrize) return const RedeemPrizeResult.failure('points_prize');
+    if (win.redemptionCode.isEmpty || win.redemptionCode != code) {
+      return const RedeemPrizeResult.failure('invalid_code');
+    }
+    if (win.collected) return const RedeemPrizeResult.failure('already_collected');
+    await markPrizeCollected(win.id, true);
+    return RedeemPrizeResult.success(win);
   }
 
   /// A booth's most recent wins for one specific game (Lucky Draw, Spin
@@ -2095,6 +2168,8 @@ class FirestoreService {
       'prizeType': isPhysical ? 'physical' : 'points',
       'drawId': drawId,
       'collected': !isPhysical,
+      // Points wins have nothing to redeem in person, so no code needed.
+      'redemptionCode': isPhysical ? _generateRedemptionCode() : '',
       'createdAt': FieldValue.serverTimestamp(),
     });
     final boothName = await _getBoothName(boothId);
@@ -2102,8 +2177,8 @@ class FirestoreService {
       uid: uid,
       title: '🎉 You Won the Lucky Draw!',
       body: isPhysical
-          ? 'You won "$prizeLabel" at $boothName\'s Lucky Draw! Show your '
-              'account to the booth staff to collect it.'
+          ? 'You won "$prizeLabel" at $boothName\'s Lucky Draw! Find your '
+              'physical prize won in My Prizes to redeem it at the booth.'
           : 'You won $pointsValue points at $boothName\'s Lucky Draw!',
       type: 'prize_win',
     );
@@ -2270,6 +2345,23 @@ class PrizeWinResult {
   const PrizeWinResult.failure(this.failureReason)
       : success = false,
         segment = null;
+}
+
+/// Result of [FirestoreService.redeemPrizeCode] — [success] is null-safe to
+/// check first; [win] (the redeemed prize) is only set on success,
+/// [failureReason] ('not_found', 'wrong_booth', 'points_prize',
+/// 'invalid_code', 'already_collected') only on failure.
+class RedeemPrizeResult {
+  final bool success;
+  final PrizeWinModel? win;
+  final String? failureReason;
+
+  const RedeemPrizeResult.success(this.win)
+      : success = true,
+        failureReason = null;
+  const RedeemPrizeResult.failure(this.failureReason)
+      : success = false,
+        win = null;
 }
 
 /// Result of [FirestoreService.registerDailyVisit].
