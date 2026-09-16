@@ -252,11 +252,19 @@ class MemoryPairsConfig {
       };
 }
 
-/// A logged physical-prize win, for the exhibitor's in-person hand-out
-/// tracking. Points-type wins are paid out immediately via addPoints() and
-/// are NOT logged here — only physical prizes need a "collected" checklist.
-/// Also powers the shared "Recent Winners" list on the Lucky Draw/Spin
-/// Wheel/Scratch Card screens (see FirestoreService.getRecentPrizeWins).
+/// A logged prize win. Historically ALWAYS physical (Spin Wheel/Scratch
+/// Card points-type wins are paid out immediately via addPoints() and were
+/// never logged here at all — only physical prizes need a "collected"
+/// checklist), so [prizeType] defaults to 'physical' for any pre-existing
+/// doc that predates this field. Lucky Draw is the one exception: it now
+/// logs BOTH points and physical wins here (see
+/// FirestoreService.recordLuckyDrawPrizeWin) — points ones purely so the
+/// winner's claim is idempotent and the exhibitor's admin card can show who
+/// won, with `collected` auto-true (nothing to hand out) and [isPointsPrize]
+/// used to keep them off the physical hand-out checklist (see
+/// ExhibitorPrizeWinsScreen). Also powers the shared "Recent Winners" list
+/// on the Lucky Draw/Spin Wheel/Scratch Card screens (see
+/// FirestoreService.getRecentPrizeWins).
 class PrizeWinModel {
   final String id;
   final String uid;
@@ -264,6 +272,7 @@ class PrizeWinModel {
   final String boothId;
   final String gameType; // 'spin_wheel' | 'scratch_card' | 'lucky_draw'
   final String prizeLabel;
+  final String prizeType; // 'points' | 'physical'
   final bool collected;
   final DateTime? createdAt;
 
@@ -274,9 +283,12 @@ class PrizeWinModel {
     required this.boothId,
     required this.gameType,
     required this.prizeLabel,
+    this.prizeType = 'physical',
     this.collected = false,
     this.createdAt,
   });
+
+  bool get isPointsPrize => prizeType == 'points';
 
   factory PrizeWinModel.fromMap(String id, Map<String, dynamic> map) =>
       PrizeWinModel(
@@ -286,6 +298,7 @@ class PrizeWinModel {
         boothId: map['boothId'] ?? '',
         gameType: map['gameType'] ?? '',
         prizeLabel: map['prizeLabel'] ?? '',
+        prizeType: map['prizeType'] ?? 'physical',
         collected: map['collected'] ?? false,
         createdAt: map['createdAt'] != null
             ? (map['createdAt'] as dynamic).toDate()
@@ -298,6 +311,7 @@ class PrizeWinModel {
         'boothId': boothId,
         'gameType': gameType,
         'prizeLabel': prizeLabel,
+        'prizeType': prizeType,
         'collected': collected,
         'createdAt': createdAt,
       };

@@ -133,7 +133,6 @@ class _DrawAdminCard extends StatefulWidget {
 class _DrawAdminCardState extends State<_DrawAdminCard> {
   Timer? _ticker;
   Duration _remaining = Duration.zero;
-  String? _winnerName;
 
   @override
   void initState() {
@@ -146,13 +145,6 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
         if (_remaining == Duration.zero) _ticker?.cancel();
       });
     }
-    _loadWinnerName();
-  }
-
-  Future<void> _loadWinnerName() async {
-    if (widget.draw.winnerUid == null) return;
-    final name = await widget.fs.getUserDisplayName(widget.draw.winnerUid!);
-    if (mounted) setState(() => _winnerName = name);
   }
 
   @override
@@ -172,52 +164,48 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
           const SnackBar(content: Text('No participants yet!')));
       return;
     }
-    // Only a REGISTERED participant can ever be drawn — joining a draw now
-    // requires registration going forward (see the visitor Lucky Draw
-    // screen's `_joinDraw`), but a draw already open before this feature
-    // may still have anonymous participants from before that gate existed.
-    // See FirestoreService.filterRegisteredUids for how "registered" is
-    // approximated here.
-    final eligible = await widget.fs.filterRegisteredUids(draw.participants);
-    if (eligible.isEmpty) {
+    // Every participant here is already a registered (non-anonymous)
+    // account — joining a draw requires registration up front (see the
+    // visitor Lucky Draw screen's `_joinDraw`), so no further eligibility
+    // check is needed (or even possible: an exhibitor can't read another
+    // visitor's profile doc — see FirestoreService's note on this).
+    final winnerUid = draw.participants[
+        (DateTime.now().millisecondsSinceEpoch) % draw.participants.length];
+    try {
+      // This is deliberately the ONLY write this method makes. Awarding
+      // the 100 points, logging the game session, and recording the prize
+      // win all write to documents the WINNER owns (users/leaderboard/
+      // prize_wins) — an exhibitor's account can't do any of that (every
+      // one of those rules is isOwner-gated), which is exactly why this
+      // used to fail right here with no visible error. That part now
+      // happens on the winning visitor's own client the next time it sees
+      // this draw — see FirestoreService.claimLuckyDrawPrizeIfEligible.
+      await widget.fs.setWinner(draw.id, winnerUid);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'No registered participants to draw from yet — everyone '
-                'who joined so far is still anonymous.')));
-      }
-      return;
-    }
-    final winnerUid =
-        eligible[(DateTime.now().millisecondsSinceEpoch) % eligible.length];
-    await widget.fs.setWinner(draw.id, winnerUid);
-    await widget.fs.addPoints(winnerUid, 'Winner', 100, gameType: 'lucky_draw');
-    await widget.fs.logGameSession(winnerUid, 'lucky_draw', 100,
-        exhibitorId: draw.exhibitorId.isNotEmpty ? draw.exhibitorId : null);
-    // Logs the win to the shared prize_wins hand-out checklist/"Recent
-    // Winners" list, and sends the winner their notification + simulated
-    // email — see FirestoreService.recordLuckyDrawPrizeWin.
-    await widget.fs.recordLuckyDrawPrizeWin(
-      uid: winnerUid,
-      boothId: draw.exhibitorId,
-      prizeLabel: draw.prize,
-    );
-    if (mounted) {
-      final name = await widget.fs.getUserDisplayName(winnerUid);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
           content: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.emoji_events_rounded,
-                  color: Colors.white, size: 18),
-              const SizedBox(width: 8),
-              Text('Winner: $name'),
+              Icon(Icons.emoji_events_rounded, color: Colors.white, size: 18),
+              SizedBox(width: 8),
+              Flexible(
+                  child: Text('Winner picked! They\'ll be notified once '
+                      'they open the app.')),
             ],
           ),
-        ),
-      );
-      setState(() => _winnerName = name);
+        ));
+      }
+    } catch (e) {
+      // Draw Winner used to fail exactly like this — silently, with
+      // nothing shown — when an earlier step threw (see the removed
+      // filterRegisteredUids note in FirestoreService). This catch-all
+      // makes sure any future failure here is visible instead of invisible.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Could not draw a winner. Check your connection and try '
+                'again.')));
+      }
     }
   }
 
@@ -314,17 +302,37 @@ class _DrawAdminCardState extends State<_DrawAdminCard> {
             ],
             if (d.winnerUid != null) ...[
               const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(Icons.emoji_events_rounded,
-                      size: 14, color: palette.warning),
-                  const SizedBox(width: 4),
-                  Text('Winner: ${_winnerName ?? "Loading..."}',
-                      style: TextStyle(
-                          color: palette.warning,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13)),
-                ],
+              // Live rather than a one-shot load: this only has a real
+              // name once the winner's OWN app has claimed the prize (see
+              // FirestoreService.claimLuckyDrawPrizeIfEligible) — an
+              // exhibitor can't read a visitor's profile to look it up
+              // directly, so this streams from the `prize_wins` record
+              // their claim creates and updates itself the moment that
+              // happens, with no refresh needed.
+              StreamBuilder<String?>(
+                stream:
+                    widget.fs.watchLuckyDrawWinnerName(d.id, d.winnerUid!),
+                builder: (context, snap) {
+                  final name = snap.data;
+                  return Row(
+                    children: [
+                      Icon(Icons.emoji_events_rounded,
+                          size: 14, color: palette.warning),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                            name != null
+                                ? 'Winner: $name'
+                                : 'Winner picked — waiting for them to '
+                                    'open the app',
+                            style: TextStyle(
+                                color: palette.warning,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13)),
+                      ),
+                    ],
+                  );
+                },
               ),
             ],
             const SizedBox(height: 12),
@@ -381,7 +389,9 @@ class _DrawFormDialogState extends State<_DrawFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _title;
   late final TextEditingController _prize;
+  late final TextEditingController _pointsCtrl;
   int _durationHours = 1;
+  String _prizeType = 'points';
   bool _saving = false;
 
   @override
@@ -390,6 +400,8 @@ class _DrawFormDialogState extends State<_DrawFormDialog> {
     final e = widget.existing;
     _title = TextEditingController(text: e?.title ?? '');
     _prize = TextEditingController(text: e?.prize ?? '');
+    _prizeType = e?.prizeType ?? 'points';
+    _pointsCtrl = TextEditingController(text: '${e?.pointsValue ?? 100}');
     if (e?.endsAt != null) {
       final hrs = e!.endsAt!.difference(DateTime.now()).inHours;
       _durationHours = hrs.clamp(1, 72);
@@ -398,7 +410,7 @@ class _DrawFormDialogState extends State<_DrawFormDialog> {
 
   @override
   void dispose() {
-    _title.dispose(); _prize.dispose();
+    _title.dispose(); _prize.dispose(); _pointsCtrl.dispose();
     super.dispose();
   }
 
@@ -406,6 +418,7 @@ class _DrawFormDialogState extends State<_DrawFormDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     final endsAt = DateTime.now().add(Duration(hours: _durationHours));
+    final isPoints = _prizeType == 'points';
     final draw = LuckyDrawModel(
       id: widget.existing?.id ?? '',
       title: _title.text.trim(),
@@ -414,6 +427,9 @@ class _DrawFormDialogState extends State<_DrawFormDialog> {
       isActive: widget.existing?.isActive ?? true,
       participants: widget.existing?.participants ?? [],
       endsAt: endsAt,
+      prizeType: _prizeType,
+      pointsValue:
+          isPoints ? (int.tryParse(_pointsCtrl.text.trim()) ?? 100) : 0,
     );
     try {
       if (widget.existing == null) {
@@ -453,6 +469,47 @@ class _DrawFormDialogState extends State<_DrawFormDialog> {
                 _field(_prize, 'Prize Description *',
                     validator: (v) =>
                         v == null || v.trim().isEmpty ? 'Required' : null),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                          value: 'points',
+                          label: Text('Points'),
+                          icon: Icon(Icons.stars_rounded)),
+                      ButtonSegment(
+                          value: 'physical',
+                          label: Text('Physical Prize'),
+                          icon: Icon(Icons.card_giftcard_rounded)),
+                    ],
+                    selected: {_prizeType},
+                    onSelectionChanged: (s) =>
+                        setState(() => _prizeType = s.first),
+                  ),
+                ),
+                if (_prizeType == 'points') ...[
+                  const SizedBox(height: 12),
+                  _field(
+                    _pointsCtrl,
+                    'Points awarded *',
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      final n = int.tryParse((v ?? '').trim());
+                      if (n == null || n <= 0) return 'Enter a number > 0';
+                      return null;
+                    },
+                  ),
+                ] else
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8, bottom: 4),
+                    child: Text(
+                      'No points are awarded for a physical prize — the '
+                      'winner collects it in person, tracked on the Prize '
+                      'Wins screen.',
+                      style: TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -495,12 +552,14 @@ class _DrawFormDialogState extends State<_DrawFormDialog> {
   }
 
   Widget _field(TextEditingController ctrl, String label,
-      {String? Function(String?)? validator}) =>
+      {String? Function(String?)? validator,
+      TextInputType? keyboardType}) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: TextFormField(
           controller: ctrl,
           validator: validator,
+          keyboardType: keyboardType,
           decoration: InputDecoration(
             labelText: label,
             border: const OutlineInputBorder(),

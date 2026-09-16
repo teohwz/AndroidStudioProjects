@@ -346,21 +346,29 @@ class FirestoreService {
   //  LUCKY DRAWS
   // ═══════════════════════════════════════════════════════════════════════
 
+  // NOTE: neither of these visitor-facing streams filters on `isActive`
+  // anymore. They used to (`where('isActive', isEqualTo: true)`), but
+  // `isActive` is flipped to false by ONE thing only — setWinner() — so
+  // that filter was silently removing a draw from every visitor's list
+  // (including the winner's own) at the exact moment it got a winner.
+  // That meant the winner banner in `_DrawCard` could never actually show,
+  // and — once the claim step existed — the winning visitor's own client
+  // would never even see the draw to claim it from. Matches
+  // getLuckyDrawsForExhibitorAdmin() below, which was already unfiltered.
   Stream<List<LuckyDrawModel>> getLuckyDraws() {
     return _db
         .collection('lucky_draws')
-        .where('isActive', isEqualTo: true)
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => LuckyDrawModel.fromMap(doc.id, doc.data()))
             .toList());
   }
 
-  /// Active lucky draws belonging to a single booth.
+  /// All lucky draws belonging to a single booth, active or closed — see
+  /// the note on [getLuckyDraws] above for why closed ones stay visible.
   Stream<List<LuckyDrawModel>> getLuckyDrawsForExhibitor(String exhibitorId) {
     return _db
         .collection('lucky_draws')
-        .where('isActive', isEqualTo: true)
         .where('exhibitorId', isEqualTo: exhibitorId)
         .snapshots()
         .map((snap) => snap.docs
@@ -1924,43 +1932,62 @@ class FirestoreService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  REGISTRATION GATE HELPER — Lucky Draw joining, Spin Wheel/Scratch Card
-  //  playing, and Rewards Shop redemption all now require a REGISTERED
+  //  REGISTRATION GATE — Lucky Draw joining, Spin Wheel/Scratch Card
+  //  playing, and Rewards Shop redemption all require a REGISTERED
   //  (non-anonymous) account (see the Prize Win Notifications round) so a
-  //  winner always has somewhere real to be notified. The gate itself is
-  //  enforced client-side at each action's call site (an anonymous visitor
-  //  simply never reaches these methods — see showRegisterRequiredDialog);
-  //  this helper only handles a Lucky Draw's own pre-existing participant
-  //  list, which may still contain uids that joined before this rule
-  //  existed and never registered.
+  //  winner always has somewhere real to be notified. The gate is enforced
+  //  entirely client-side at each action's call site (an anonymous visitor
+  //  simply never reaches these methods — see showRegisterRequiredDialog),
+  //  which means every uid appended to a Lucky Draw's `participants` list
+  //  is already guaranteed registered at the moment they join.
+  //
+  //  A `filterRegisteredUids()` helper used to re-check this at draw time
+  //  by reading each participant's `users/{uid}` doc for a non-empty email
+  //  — a leftover safety net for draws that predated the join-time gate.
+  //  It was removed: `users/{uid}` reads are locked to the owner or a
+  //  Super Admin (see the `/users/{userId}` rule above), so an exhibitor
+  //  calling it on a visitor's uid got a permission-denied error on every
+  //  single participant, every time — silently, since nothing caught it —
+  //  which is why "Draw Winner" did nothing at all when tapped. The
+  //  join-time gate above already makes the re-check redundant for any
+  //  draw going forward, so ManageLuckyDrawScreen now draws directly from
+  //  `draw.participants`.
+  //
+  //  Round two of that same bug: once the winner-selection fix above
+  //  shipped, "Draw Winner" picked a winner fine but then failed on
+  //  addPoints()/the leaderboard write/recordLuckyDrawPrizeWin() — all of
+  //  which write to the WINNER's own `users`/`leaderboard`/`prize_wins`
+  //  docs, but were being called from the EXHIBITOR's account. Every one
+  //  of those rules is `isOwner(uid) || isSuperAdmin()`-gated, same as
+  //  `/users/{userId}`, and an exhibitor is neither for a visitor's uid.
+  //  Rather than carve out an "exhibitor acting on behalf of a winner"
+  //  exception (which every other points-earning path in this app avoids
+  //  needing), the award now happens on the WINNING VISITOR's own client
+  //  instead — see [claimLuckyDrawPrizeIfEligible], called from the
+  //  visitor Lucky Draw screen whenever it notices `winnerUid == myUid`.
+  //  That satisfies every one of these rules for free, the same way
+  //  playing any other game already does. `ManageLuckyDrawScreen._doDraw`
+  //  now only ever calls [setWinner] — nothing else.
   // ═══════════════════════════════════════════════════════════════════════
 
-  /// Returns the subset of [uids] that belong to a registered account —
-  /// approximated by a non-empty `email` on their `users/{uid}` doc, since
-  /// there is no way to read another uid's Firebase Auth anonymous flag
-  /// from Firestore alone. Used by ManageLuckyDrawScreen's "Draw Winner" so
-  /// an anonymous participant who joined before this feature can never be
-  /// picked (going forward, joining itself is gated — see the visitor
-  /// Lucky Draw screen's `_joinDraw`).
-  Future<List<String>> filterRegisteredUids(List<String> uids) async {
-    final registered = <String>[];
-    for (final uid in uids) {
-      final snap = await _db.collection('users').doc(uid).get();
-      final email = snap.data()?['email'] as String? ?? '';
-      if (email.isNotEmpty) registered.add(uid);
-    }
-    return registered;
-  }
-
   /// Lucky Draw's counterpart to [playPrizeGame]'s physical-prize branch —
-  /// called once ManageLuckyDrawScreen picks a winner, so a Lucky Draw win
-  /// lands on the same `prize_wins` hand-out checklist and "Recent Winners"
-  /// list as Spin Wheel/Scratch Card physical prizes, and triggers the same
-  /// notification/simulated-email as any other prize win.
+  /// called by the WINNING VISITOR's own account (see
+  /// [claimLuckyDrawPrizeIfEligible]) once they're picked. Unlike Spin
+  /// Wheel/Scratch Card (which only ever log PHYSICAL wins here — see
+  /// [PrizeWinModel]'s doc comment), Lucky Draw logs a record for BOTH
+  /// prize types: [isPhysical] controls the wording, whether points get
+  /// mentioned, and `collected` (auto-true for points — nothing to hand
+  /// out — false for physical, same "to hand out" checklist Spin
+  /// Wheel/Scratch Card physical prizes already use). [drawId] is stamped
+  /// on purely so [claimLuckyDrawPrizeIfEligible] can tell "already
+  /// claimed" apart from "not yet" for this specific draw.
   Future<void> recordLuckyDrawPrizeWin({
     required String uid,
     required String boothId,
     required String prizeLabel,
+    required String drawId,
+    required bool isPhysical,
+    int pointsValue = 0,
   }) async {
     final name = await getUserDisplayName(uid) ?? 'Player';
     await _db.collection('prize_wins').add({
@@ -1969,17 +1996,88 @@ class FirestoreService {
       'boothId': boothId,
       'gameType': 'lucky_draw',
       'prizeLabel': prizeLabel,
-      'collected': false,
+      'prizeType': isPhysical ? 'physical' : 'points',
+      'drawId': drawId,
+      'collected': !isPhysical,
       'createdAt': FieldValue.serverTimestamp(),
     });
     final boothName = await _getBoothName(boothId);
     await _notifyUser(
       uid: uid,
       title: '🎉 You Won the Lucky Draw!',
-      body: 'You won "$prizeLabel" at $boothName\'s Lucky Draw! Show your '
-          'account to the booth staff to collect it.',
+      body: isPhysical
+          ? 'You won "$prizeLabel" at $boothName\'s Lucky Draw! Show your '
+              'account to the booth staff to collect it.'
+          : 'You won $pointsValue points at $boothName\'s Lucky Draw!',
       type: 'prize_win',
     );
+  }
+
+  /// Called by the winning visitor's OWN client — see the note above on why
+  /// this moved off the exhibitor's account. Does nothing unless [uid] is
+  /// actually this [draw]'s winner, and is idempotent: it checks for an
+  /// existing `prize_wins` record for this exact draw first, so revisiting
+  /// the Lucky Draw screen (or the underlying stream simply rebuilding)
+  /// never awards points / logs the session / writes the notification more
+  /// than once. Branches on [LuckyDrawModel.isPointsPrize]/[pointsValue]
+  /// (the exhibitor-configured prize — see [_DrawFormDialog] — no longer a
+  /// hardcoded 100): a points draw awards that amount, a physical draw
+  /// awards none and instead lands on the Prize Wins hand-out checklist.
+  /// Best-effort by design — this runs passively every time the visitor's
+  /// Lucky Draw screen sees fresh draw data, so a transient failure just
+  /// means it quietly tries again next time, the same as this screen
+  /// already behaved before any claim step existed.
+  Future<void> claimLuckyDrawPrizeIfEligible(
+    LuckyDrawModel draw,
+    String uid,
+    String displayName,
+  ) async {
+    if (draw.winnerUid != uid) return;
+    try {
+      final already = await _db
+          .collection('prize_wins')
+          .where('uid', isEqualTo: uid)
+          .where('drawId', isEqualTo: draw.id)
+          .limit(1)
+          .get();
+      if (already.docs.isNotEmpty) return;
+
+      final awardedPoints = draw.isPointsPrize ? draw.pointsValue : 0;
+      if (draw.isPointsPrize && awardedPoints > 0) {
+        await addPoints(uid, displayName, awardedPoints, gameType: 'lucky_draw');
+      }
+      await logGameSession(uid, 'lucky_draw', awardedPoints,
+          exhibitorId: draw.exhibitorId.isNotEmpty ? draw.exhibitorId : null);
+      await recordLuckyDrawPrizeWin(
+        uid: uid,
+        boothId: draw.exhibitorId,
+        prizeLabel: draw.prize,
+        drawId: draw.id,
+        isPhysical: draw.isPhysicalPrize,
+        pointsValue: awardedPoints,
+      );
+    } catch (e) {
+      debugPrint('claimLuckyDrawPrizeIfEligible failed for draw ${draw.id}: $e');
+    }
+  }
+
+  /// Live winner-name lookup for a Lucky Draw, from the `prize_wins`
+  /// record the winner's own claim creates (see
+  /// [claimLuckyDrawPrizeIfEligible]) — NOT from `users/{uid}`, which an
+  /// exhibitor can't read for anyone but themselves. A stream rather than
+  /// a one-shot read so ManageLuckyDrawScreen's admin card updates itself
+  /// the instant the winner's app claims the prize, with no polling.
+  /// Emits null until that happens (the winner hasn't opened the app
+  /// yet), then the real name.
+  Stream<String?> watchLuckyDrawWinnerName(String drawId, String winnerUid) {
+    return _db
+        .collection('prize_wins')
+        .where('drawId', isEqualTo: drawId)
+        .where('uid', isEqualTo: winnerUid)
+        .limit(1)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.isEmpty ? null : snap.docs.first.data()['userName'] as String?);
   }
 
   // ═══════════════════════════════════════════════════════════════════════

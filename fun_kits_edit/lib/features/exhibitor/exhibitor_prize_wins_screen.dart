@@ -34,7 +34,13 @@ class ExhibitorPrizeWinsScreen extends StatelessWidget {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          final wins = snap.data ?? [];
+          // Points-type Lucky Draw wins are logged to `prize_wins` too now
+          // (see PrizeWinModel's doc comment) purely so the claim step is
+          // idempotent and the exhibitor's admin card can show who won —
+          // there's nothing to hand out for those, so this checklist stays
+          // physical-only, exactly as it always was for Spin Wheel/Scratch
+          // Card.
+          final wins = (snap.data ?? []).where((w) => !w.isPointsPrize).toList();
           if (wins.isEmpty) {
             return Center(
               child: Column(

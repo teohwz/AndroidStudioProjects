@@ -26,6 +26,14 @@ class _LuckyDrawScreenState extends State<LuckyDrawScreen> {
   bool _loadingJoined = true;
   Map<String, String> _winnerNames = {}; // drawId -> winner name
 
+  // Lightweight per-session guard so a claim attempt (a Firestore query +
+  // up to 3 writes) only ever fires once per draw per time this screen is
+  // alive, even though the stream below can rebuild often. The REAL
+  // once-only guarantee is FirestoreService.claimLuckyDrawPrizeIfEligible's
+  // own "does a prize_wins record already exist" check — this is just
+  // about not hammering Firestore with redundant reads on every rebuild.
+  final Set<String> _claimAttempted = {};
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +67,21 @@ class _LuckyDrawScreenState extends State<LuckyDrawScreen> {
       }
     }
     if (mounted) setState(() => _winnerNames = names);
+  }
+
+  // Fire-and-forget: for any draw where I'm the winner, ask
+  // FirestoreService to award the prize if it hasn't been already. Safe to
+  // call on every stream emission — see the `_claimAttempted` field above
+  // and claimLuckyDrawPrizeIfEligible's own idempotency check.
+  void _maybeClaimWinnings(List<LuckyDrawModel> draws, String uid) {
+    for (final draw in draws) {
+      if (draw.winnerUid == uid && !_claimAttempted.contains(draw.id)) {
+        _claimAttempted.add(draw.id);
+        final displayName =
+            FirebaseAuth.instance.currentUser?.displayName ?? 'Player';
+        _fs.claimLuckyDrawPrizeIfEligible(draw, uid, displayName);
+      }
+    }
   }
 
   Future<void> _joinDraw(LuckyDrawModel draw) async {
@@ -120,8 +143,15 @@ class _LuckyDrawScreenState extends State<LuckyDrawScreen> {
           }
           final draws = snap.data ?? [];
 
-          // Once a draw ends (isActive=false), clear joinedDrawId so user can join another
-          final activeIds = draws.map((d) => d.id).toSet();
+          if (uid.isNotEmpty) _maybeClaimWinnings(draws, uid);
+
+          // Once a draw ends (isActive=false), clear joinedDrawId so user can
+          // join another. Checked via `d.isActive` now, not "is this draw
+          // still in the list" — closed draws stay in `draws` (see
+          // FirestoreService.getLuckyDraws' note) so the winner banner and
+          // the claim step above can still see them.
+          final activeIds =
+              draws.where((d) => d.isActive).map((d) => d.id).toSet();
           if (_joinedDrawId != null && !activeIds.contains(_joinedDrawId)) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) setState(() => _joinedDrawId = null);
