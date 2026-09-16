@@ -1554,33 +1554,41 @@ class FirestoreService {
   //  prototype/single-exhibition scale, same trade-off already made for the
   //  per-booth leaderboard elsewhere in this file.
   // ═══════════════════════════════════════════════════════════════════════
+  ///
+  /// `totalPlays` counts `game_sessions` documents — every finished round of
+  /// EVERY game type (the 6 generic mini-games AND the prize games: Lucky
+  /// Draw/Spin Wheel/Scratch Card/Quiz) logs one there via
+  /// [logGameSession]/[submitGameScore] regardless of category. This used
+  /// to instead sum the `plays` map inside `game_plays` docs, but that map
+  /// is only ever incremented by [recordGamePlay] — which [submitGameScore]
+  /// calls just for the 6 generic mini-games that draw from the shared
+  /// per-booth attempt pool, NOT for prize games (they have their own,
+  /// separate play flow that never touches `game_plays`). That meant
+  /// "Plays" (all-time) and "+N today" on the Exhibitor Dashboard were
+  /// silently counting two different, incompatible things — confirmed by
+  /// the visible symptom of "+17 today" on a "12" all-time total, which is
+  /// only possible if today's count (from `game_sessions`, every game type)
+  /// is drawn from a strictly larger set than all-time's (from
+  /// `game_plays`, generic games only). Now both use the exact same
+  /// `game_sessions` source as [getBoothStatsToday] below, just without its
+  /// date filter, so the two numbers are always mutually consistent.
   Future<Map<String, int>> getBoothStats(String boothId) async {
     final checkIns = await _db
         .collection('booth_checkins')
         .where('boothId', isEqualTo: boothId)
         .get();
-    final plays = await _db
-        .collection('game_plays')
-        .where('boothId', isEqualTo: boothId)
-        .get();
-    var totalPlays = 0;
-    for (final doc in plays.docs) {
-      final map = Map<String, dynamic>.from(doc.data()['plays'] ?? {});
-      for (final v in map.values) {
-        totalPlays += (v as num?)?.toInt() ?? 0;
-      }
-    }
     final sessions = await _db
         .collection('game_sessions')
         .where('exhibitorId', isEqualTo: boothId)
         .get();
     var pointsDistributed = 0;
     for (final doc in sessions.docs) {
-      pointsDistributed += (doc.data()['points'] as num?)?.toInt() ?? 0;
+      final points = doc.data()['points'];
+      if (points is num) pointsDistributed += points.toInt();
     }
     return {
       'checkIns': checkIns.docs.length,
-      'totalPlays': totalPlays,
+      'totalPlays': sessions.docs.length,
       'pointsDistributed': pointsDistributed,
     };
   }
@@ -1588,9 +1596,21 @@ class FirestoreService {
   /// Same 3 counts as [getBoothStats], filtered to just today (device-local
   /// midnight to now) — powers the Exhibitor Dashboard Overview tab's "+N
   /// today" trend line on each stat tile. One-shot, same client-side
-  /// counting trade-off as [getBoothStats]; if Firestore reports a missing
-  /// composite index the first time this runs, its error includes a direct
-  /// link to auto-create it (same as any other query in this app).
+  /// counting trade-off as [getBoothStats].
+  ///
+  /// The `.orderBy(..., descending: true)` on both queries below is
+  /// deliberate, not decorative: an equality filter + range filter with NO
+  /// explicit orderBy implicitly needs that range field ASCENDING, which is
+  /// a DIFFERENT composite index than the DESCENDING ones
+  /// [getRecentBoothActivity] below already needs and already has built
+  /// (`booth_checkins` boothId+checkedInAt, `game_sessions`
+  /// exhibitorId+playedAt). Without this orderBy, this method was throwing
+  /// `failed-precondition: query requires an index` on every call — and
+  /// because both queries here are combined via `Future.wait` up in
+  /// `_StatsRow`, that one throw was silently zeroing out every stat on the
+  /// Exhibitor Dashboard (check-ins/plays/points, not just "+N today"),
+  /// confirmed live via the dashboard's own error banner. Matching the
+  /// existing descending index here avoids needing a brand new one.
   Future<Map<String, int>> getBoothStatsToday(String boothId) async {
     final startOfToday = DateTime(
         DateTime.now().year, DateTime.now().month, DateTime.now().day);
@@ -1599,15 +1619,18 @@ class FirestoreService {
         .collection('booth_checkins')
         .where('boothId', isEqualTo: boothId)
         .where('checkedInAt', isGreaterThanOrEqualTo: todayTs)
+        .orderBy('checkedInAt', descending: true)
         .get();
     final sessions = await _db
         .collection('game_sessions')
         .where('exhibitorId', isEqualTo: boothId)
         .where('playedAt', isGreaterThanOrEqualTo: todayTs)
+        .orderBy('playedAt', descending: true)
         .get();
     var pointsToday = 0;
     for (final doc in sessions.docs) {
-      pointsToday += (doc.data()['points'] as num?)?.toInt() ?? 0;
+      final points = doc.data()['points'];
+      if (points is num) pointsToday += points.toInt();
     }
     return {
       'checkIns': checkIns.docs.length,

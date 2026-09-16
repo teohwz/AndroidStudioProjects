@@ -724,6 +724,14 @@ class _StatsRow extends StatelessWidget {
       future: Future.wait(
           [fs.getBoothStats(boothId), fs.getBoothStatsToday(boothId)]),
       builder: (context, snap) {
+        if (snap.hasError) {
+          // A genuine fetch failure used to fall through to snap.data ==
+          // null and every tile below quietly showed 0 — indistinguishable
+          // from "no activity yet". Surface it instead, so a real problem
+          // looks like a problem and its exact text can be read off-device.
+          debugPrint('Exhibitor stats failed to load: ${snap.error}');
+          return _StatsErrorBanner(error: snap.error.toString());
+        }
         final stats = snap.data != null ? snap.data![0] : const <String, int>{};
         final today = snap.data != null ? snap.data![1] : const <String, int>{};
         return Row(
@@ -748,6 +756,56 @@ class _StatsRow extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Shown in place of the 3 stat tiles when the fetch behind them throws —
+/// see the `snap.hasError` check in [_StatsRow.build]. Tap to read the full
+/// error text (useful for reporting it back, since this is as much a live
+/// diagnostic as it is an error state).
+class _StatsErrorBanner extends StatelessWidget {
+  const _StatsErrorBanner({required this.error});
+  final String error;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text("Couldn't load stats"),
+          content: SingleChildScrollView(child: Text(error)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        decoration: BoxDecoration(
+          color: palette.danger.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline_rounded, size: 18, color: palette.danger),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "Couldn't load check-ins / plays / points — tap for details",
+                style: TextStyle(fontSize: 12, color: palette.danger),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

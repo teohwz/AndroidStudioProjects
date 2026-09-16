@@ -191,9 +191,9 @@ class ExhibitorAnalyticsScreen extends StatelessWidget {
       );
 }
 
-/// Smallest "nice" (5/10/20/50/100) axis-label interval that's still close
-/// to the given value, so `value` rounded up to a multiple of the result
-/// always lands on a whole, evenly-spaced tick. Without an explicit
+/// Smallest "nice" (5/10/20/50/100/...) axis-label interval that's still
+/// close to the given value, so `value` rounded up to a multiple of the
+/// result always lands on a whole, evenly-spaced tick. Without an explicit
 /// `interval` on a bar chart's left axis, fl_chart auto-picks its own tick
 /// spacing AND always draws one extra label exactly at `maxY` — when
 /// `maxY` is a fractional, off-grid value (e.g. `count * 1.25`), that
@@ -203,11 +203,25 @@ class ExhibitorAnalyticsScreen extends StatelessWidget {
 /// `my_stats_screen.dart`'s Average-Score-by-Game chart earlier this
 /// project — duplicated here rather than shared, matching this codebase's
 /// existing per-file convention for small chart helpers.
+///
+/// The tiers above 100 used to jump straight to a flat 50 no matter how
+/// large `value` got — fine for play counts (small numbers) but not for
+/// "Daily Points Distributed," where a single active day can rack up
+/// hundreds of points. A max around 1000 with a fixed interval of 50 drew
+/// ~20 labels squeezed into this screen's ~200px-tall chart, which is what
+/// actually produced the cluttered, overlapping y-axis (not a rendering
+/// bug — just too many ticks for the space). Extending the "nice" ladder
+/// (100/200/250/500/1000) keeps the label count in roughly the same
+/// readable range regardless of magnitude.
 double _niceAxisInterval(double value) {
   if (value <= 20) return 5;
   if (value <= 50) return 10;
   if (value <= 100) return 20;
-  return 50;
+  if (value <= 250) return 50;
+  if (value <= 500) return 100;
+  if (value <= 1000) return 200;
+  if (value <= 2500) return 500;
+  return 1000;
 }
 
 class _DayAgg {
