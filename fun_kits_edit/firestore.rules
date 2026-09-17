@@ -210,12 +210,30 @@ service cloud.firestore {
       // new doc to exist, be unused, and belong to a still-unclaimed booth
       // matching this uid's new `boothId` — i.e. this can never succeed
       // except as the tail end of a real invite redemption.
+      //
+      // FIXED 2026-09-17 ("can't claim my booth" — permission-denied on
+      // every single claim attempt): this used to check
+      // `get(exhibitors/{boothId}).data.ownerUid == userId` — but that
+      // read always sees the CURRENT COMMITTED database, never another
+      // document's write staged earlier in this same client transaction.
+      // Since the exhibitors/{boothId} ownerUid write happens in the SAME
+      // transaction as this one, that ownerUid could never equal userId
+      // yet when this rule evaluates — this check could not pass for any
+      // real first-time claim, ever. (It also silently never actually
+      // checked the invite code at all, despite what the comment above
+      // claims — a second, separate bug.) Fixed by checking the invite's
+      // own PRE-transaction state instead — "was this invite currently
+      // unused, and for this exact booth" is a fact that's already true
+      // before this transaction starts, so reading it via get() here is
+      // safe and correct, unlike reading a sibling write's result.
       allow create: if isOwner(userId)
         && request.resource.data.role == 'exhibitor'
         && request.resource.data.get('points', 0) == 0
         && request.resource.data.accountStatus == 'active'
         && request.resource.data.boothId is string
-        && get(/databases/$(database)/documents/exhibitors/$(request.resource.data.boothId)).data.get('ownerUid', '') == userId;
+        && request.resource.data.inviteCode is string
+        && get(/databases/$(database)/documents/exhibitor_invites/$(request.resource.data.inviteCode)).data.used == false
+        && get(/databases/$(database)/documents/exhibitor_invites/$(request.resource.data.inviteCode)).data.boothId == request.resource.data.boothId;
 
       // Super Admin: full control over any user's doc (points/role/ban/etc).
       allow update, delete: if isSuperAdmin();

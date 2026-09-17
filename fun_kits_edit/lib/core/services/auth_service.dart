@@ -369,6 +369,27 @@ class AuthService extends ChangeNotifier {
     required String password,
     required String displayName,
   }) async {
+    // Suppress the constructor's authStateChanges() listener for this whole
+    // create-account-then-verify-invite window — the same pattern [login]
+    // and [loginAsVisitor] already use, for the same underlying reason.
+    // ROOT CAUSE (confirmed 2026-09-17) of "it automatically registers me
+    // as a visitor, with no error shown" after a failed booth claim:
+    // createUserWithEmailAndPassword() below fires that listener
+    // immediately with the brand-new, REAL (non-anonymous) account. At
+    // that instant no users/{uid} doc exists yet — the invite hasn't been
+    // redeemed, or is about to fail — so the unsuppressed listener's
+    // getUserRole() call defaults the role to 'visitor' and broadcasts it
+    // via notifyListeners(). app.dart's reactive root immediately swaps to
+    // the visitor Home screen out from under this still-in-progress
+    // registration attempt — including out from under the SnackBar this
+    // method shows on failure, since the register screen is already gone
+    // by the time that runs. Suppressing broadcast here means none of that
+    // intermediate state is ever visible: the rest of the app only learns
+    // the outcome (success as 'exhibitor', or failure left fully signed
+    // out) once this method is done.
+    _suppressAuthBroadcast = true;
+    await _roleSub?.cancel();
+    _roleSub = null;
     try {
       isLoading = true;
       notifyListeners();
@@ -393,6 +414,18 @@ class AuthService extends ChangeNotifier {
           // auth account with no role/booth, which can't sign in anywhere
           // useful and can be removed manually from the Firebase Console.
         }
+        // Whichever way the cleanup above went, make sure this device is
+        // NOT left signed into that account: a successful delete() above
+        // already clears it, but if delete() failed this is what
+        // guarantees the failed attempt never leaves a signed-in (if
+        // role-less) session behind. Broadcast is still suppressed, so
+        // none of this is ever visible to the reactive root as a flash.
+        try {
+          await _auth.signOut();
+        } catch (_) {}
+        _cachedRole = 'visitor';
+        _cachedBoothId = null;
+        _roleReadyForUid = null;
         switch (outcome.failureReason) {
           case 'already_used':
             return 'That invite code has already been used.';
@@ -412,13 +445,16 @@ class AuthService extends ChangeNotifier {
       }
       _cachedRole = 'exhibitor';
       _cachedBoothId = outcome.redemptionId; // booth id, on success
-      notifyListeners();
+      _roleReadyForUid = uid;
+      final myGeneration = ++_authEventGeneration;
+      _watchOwnUserDoc(uid, myGeneration);
       return null; // success
     } on FirebaseAuthException catch (e) {
       return e.message ?? e.code;
     } catch (e) {
       return e.toString();
     } finally {
+      _suppressAuthBroadcast = false;
       isLoading = false;
       notifyListeners();
     }

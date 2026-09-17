@@ -236,6 +236,12 @@ class FirestoreService {
         'points': 0,
         'accountStatus': 'active',
         'createdAt': FieldValue.serverTimestamp(),
+        // Lets the users/{uid} security rule verify this create against
+        // the invite's own (pre-transaction) unused/boothId state, instead
+        // of the exhibitors/{boothId} doc's post-transaction ownerUid —
+        // see the "can't claim my booth" permission-denied fix in
+        // firestore.rules for why that used to be impossible to satisfy.
+        'inviteCode': code,
       });
 
       return RedemptionOutcome.success(boothId);
