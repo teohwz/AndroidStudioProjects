@@ -67,6 +67,12 @@ class _ManageGuessNumberScreenState extends State<ManageGuessNumberScreen> {
   }
 
   Future<void> _load() async {
+    // Guarantees a `guess_number` doc exists before this screen ever shows
+    // its controls — see ensureGuessNumberSeeded's doc comment for why:
+    // without it, "Randomize Now"/"Set" would fail (NOT_FOUND) on a booth
+    // that had never yet tapped "Save Guess the Number" once, leaving the
+    // "Set" button stuck spinning forever. Mirrors ManageCodeBreakerScreen.
+    await _fs.ensureGuessNumberSeeded(widget.boothId);
     final config = await _fs.getGuessNumberConfig(widget.boothId);
     if (!mounted) return;
     if (config != null) {
@@ -123,7 +129,13 @@ class _ManageGuessNumberScreenState extends State<ManageGuessNumberScreen> {
           content: Text('Save a valid min/max range first.')));
       return;
     }
-    await _fs.rerollGuessNumberSecret(widget.boothId, min, max);
+    try {
+      await _fs.rerollGuessNumberSecret(widget.boothId, min, max);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not randomize the answer: $e')));
+    }
   }
 
   Future<void> _setCustomSecret() async {
@@ -142,12 +154,22 @@ class _ManageGuessNumberScreenState extends State<ManageGuessNumberScreen> {
       _settingCustom = true;
       _customSecretError = null;
     });
-    await _fs.setGuessNumberSecret(widget.boothId, value);
-    if (!mounted) return;
-    setState(() => _settingCustom = false);
-    _customSecretCtrl.clear();
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Answer updated!')));
+    // Always clears _settingCustom, success or failure — previously an
+    // uncaught error here (e.g. NOT_FOUND on a booth with no doc yet, see
+    // ensureGuessNumberSeeded) left this button spinning forever with no
+    // feedback at all, since nothing after a thrown await ever ran.
+    try {
+      await _fs.setGuessNumberSecret(widget.boothId, value);
+      if (!mounted) return;
+      _customSecretCtrl.clear();
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Answer updated!')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _customSecretError = 'Could not set the answer: $e');
+    } finally {
+      if (mounted) setState(() => _settingCustom = false);
+    }
   }
 
   @override

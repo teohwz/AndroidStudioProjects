@@ -1823,6 +1823,33 @@ class FirestoreService {
   }
 
   // ── Guess the Number ───────────────────────────────────────────────────
+  /// Seeds a default Guess the Number config (range 1-100, 50 points, no
+  /// hint, a freshly-rolled answer) the first time this booth's Manage
+  /// screen is opened by its own exhibitor — a no-op if a doc already
+  /// exists. Mirrors [ensureCodeBreakerSeeded] exactly, for the same
+  /// reason: without this, a booth that had never yet tapped the main
+  /// "Save Guess the Number" button had NO `guess_number` doc at all, so
+  /// [setGuessNumberSecret]/[rerollGuessNumberSecret] (both plain
+  /// `.update()` calls, which require an existing document to touch) threw
+  /// a NOT_FOUND the instant "Randomize Now"/"Set" was used first — leaving
+  /// the Manage screen's "Set" button spinning forever (its `await` never
+  /// returned to clear the loading flag). Confirmed root cause, 2026-09-17.
+  Future<void> ensureGuessNumberSeeded(String boothId) async {
+    final ref = _gameContentRef(boothId, 'guess_number');
+    final snap = await ref.get();
+    if (snap.exists) return;
+    const min = 1;
+    const max = 100;
+    final map = GuessNumberConfig(
+      boothId: boothId,
+      minValue: min,
+      maxValue: max,
+      currentSecret: min + Random().nextInt(max - min + 1),
+    ).toMap();
+    map['updatedAt'] = FieldValue.serverTimestamp();
+    await ref.set(map);
+  }
+
   Future<GuessNumberConfig?> getGuessNumberConfig(String boothId) async {
     final snap = await _gameContentRef(boothId, 'guess_number').get();
     if (!snap.exists) return null;
